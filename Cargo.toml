@@ -1,10 +1,13 @@
 [package]
 name = "gnew"
 version = "0.1.0"
+authors = ["Roka Hosono", "Will Hulsey", "Antonio Martinez", "Paul Ouellette", "Pavlo Pastaryev"]
 edition = "2021"
+description = "The low-effort content tracker"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 chrono = "0.4.19"
+structopt = "0.3.25"
 sha1 = "0.6.0"
