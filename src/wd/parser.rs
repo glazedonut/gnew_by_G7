@@ -7,24 +7,36 @@ pub enum Gnew {
     /// Create an empty repository
     Init,
     /// Copy an existing repository
-    Clone,
+    Clone {
+        repository: PathBuf,
+        directory: PathBuf,
+    },
     /// Add files to tracking list
     Add {
-        #[structopt(parse(from_os_str))]
-        files: Vec<PathBuf>,
+        #[structopt(required = true)]
+        paths: Vec<PathBuf>,
     },
     /// Remove files from tracking list
-    Remove {},
+    Remove {
+        #[structopt(required = true)]
+        files: Vec<PathBuf>,
+
+        #[structopt(short)]
+        recursive: bool,
+    },
     /// Show the repository status
     Status,
     /// List the heads
     Heads,
     /// Show changes between commits
-    Diff {},
+    Diff {
+        #[structopt(max_values = 2)]
+        commits: Vec<String>,
+    },
     /// Output a file at a commit
-    Cat {},
+    Cat { commit: String, path: PathBuf },
     /// Check out a commit
-    Checkout {},
+    Checkout { commit: String },
     /// Commit changes to the repository
     Commit {
         #[structopt(short)]
@@ -33,11 +45,11 @@ pub enum Gnew {
     /// Show the commit log
     Log,
     /// Merge two commits
-    Merge {},
+    Merge { commit: String },
     /// Pull changes from another repository
-    Pull {},
+    Pull { repository: PathBuf },
     /// Push changes to another repository
-    Push {},
+    Push { repository: PathBuf },
 }
 
 pub fn parse() -> Gnew {
