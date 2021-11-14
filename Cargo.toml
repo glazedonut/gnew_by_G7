@@ -10,4 +10,4 @@ description = "The low-effort content tracker"
 [dependencies]
 chrono = "0.4.19"
 structopt = "0.3.25"
-sha1 = "0.6.0"
+sha1 = { version = "0.6.0", features = ["std"] }

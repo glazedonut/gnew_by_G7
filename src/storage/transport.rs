@@ -1,11 +1,12 @@
 use super::serialize;
 use crate::repo::object::{Blob, Commit, Hash, Tree};
 use std::io;
+use std::path::Path;
 
-/// Updates the hash of a blob object and writes it to storage.
+/// Creates and writes a blob object from the contents of a file.
 /// Returns the hash or error.
-pub fn write_blob(blob: Blob) -> io::Result<Hash> {
-    // Call serialize_blob and write the byte vector to a file.
+pub fn write_blob(path: &Path) -> io::Result<Hash> {
+    // create blob from file contents, serialize blob, write to .gnew/objects/hash
     todo!()
 }
 
@@ -19,8 +20,7 @@ pub fn write_commit(commit: Commit) -> io::Result<Hash> {
 
 /// Reads the blob object with the given hash from storage.
 pub fn read_blob(hash: Hash) -> Result<Blob, &'static str> {
-    // Read file and pass the contents to deserialize_blob.
-    // Set the hash on the returned object.
+    // deserialize blob from .gnew/objects/hash and verify that the blob has the requested hash.
     todo!()
 }
 
