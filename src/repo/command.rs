@@ -1,9 +1,14 @@
 use crate::repo::object::{Blob, Hash, Repository};
-use crate::storage::transport::{self, Result};
+use crate::storage::transport::{self, Result, Error};
 use std::path::Path;
 
 pub fn init() -> Result<Repository> {
-    todo!()
+    let mut newEmptyRepo= Repository::create_empty();
+    match newEmptyRepo {
+        Ok(r) => {Ok(r)}
+        Err(r) => {Err(r)}
+    }
+
 }
 
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {
