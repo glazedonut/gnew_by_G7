@@ -1,6 +1,6 @@
 use crate::repo::command;
 use crate::repo::object::Hash;
-use crate::storage::transport::Result;
+use crate::storage::transport::{Result, Error};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -69,7 +69,7 @@ pub fn parse() -> Gnew {
 }
 
 pub fn init() -> Result<()> {
-    todo!()
+    command::init()
 }
 
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
