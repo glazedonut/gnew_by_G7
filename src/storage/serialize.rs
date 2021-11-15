@@ -41,12 +41,12 @@ pub fn deserialize_commit(obj: &[u8]) -> Option<Commit> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
     #[test]
     fn serde_blob() {
-        let mut b1 = Blob::new(b"hello world".to_vec());
+        let mut b1 = Blob::with_content(b"hello world".to_vec());
         let b2 = deserialize_blob(&serialize_blob(&mut b1)).unwrap();
         assert_eq!(b1, b2);
     }

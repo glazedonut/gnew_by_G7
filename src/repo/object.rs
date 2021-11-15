@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
+use std::fmt;
 
 #[derive(Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -8,7 +9,7 @@ pub struct Hash(sha1::Digest);
 pub struct Repository {
     current_head: Option<Commit>,
     heads: Vec<Commit>,
-    staging_area: Vec<String>
+    staging_area: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -26,7 +27,7 @@ pub struct Tree {
     hash: Hash,
     name: Option<String>,
     trees: Option<Vec<Tree>>,
-    blobs: Option<Vec<Blob>>
+    blobs: Option<Vec<Blob>>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -46,12 +47,18 @@ impl Hash {
     }
 }
 
+impl fmt::Display for Hash {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl Repository {
     pub fn new() -> Repository {
         Repository {
             current_head: None,
             heads: Vec::<Commit>::new(),
-            staging_area: Vec::<String>::new()
+            staging_area: Vec::<String>::new(),
         }
     }
 
@@ -68,9 +75,9 @@ impl Blob {
         Blob {
             hash: Hash::new(),
             name: None,
-            content: Vec::<u8>::new()
+            content: Vec::<u8>::new(),
         }
-    } 
+    }
 
     pub fn with_content(content: Vec<u8>) -> Blob {
         Blob {
