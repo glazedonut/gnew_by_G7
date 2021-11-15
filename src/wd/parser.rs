@@ -1,6 +1,6 @@
 use crate::repo::command;
 use crate::repo::object::Hash;
-use crate::storage::transport::{Result, Error};
+use crate::storage::transport::Result;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -58,10 +58,16 @@ pub enum Gnew {
     // Low-level commands
     //
     /// Write a blob object from a file
-    HashFile { path: PathBuf },
+    HashFile {
+        /// The file to hash
+        path: PathBuf,
+    },
 
     /// Show the content of an object
-    CatObject { object: Hash },
+    CatObject {
+        /// The object to show
+        object: Hash,
+    },
 }
 
 pub fn parse() -> Gnew {
@@ -69,7 +75,9 @@ pub fn parse() -> Gnew {
 }
 
 pub fn init() -> Result<()> {
-    command::init()
+    command::init()?;
+    println!("Initialized empty Gnew repository in .gnew");
+    Ok(())
 }
 
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
