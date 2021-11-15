@@ -80,6 +80,10 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
+pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
+    command::add(paths)
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     command::hash_file(path).map(|blob| println!("{}", blob.hash()))
 }
@@ -95,6 +99,7 @@ pub fn main() {
         Gnew::Init => init(),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::CatObject { object } => cat_object(object),
+        Gnew::Add { paths } => add(paths),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

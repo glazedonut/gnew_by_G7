@@ -7,6 +7,10 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
+pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
+    Repository::add_to_staging_area(files)
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {
     transport::write_blob(path)
 }

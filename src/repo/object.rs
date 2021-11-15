@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
 use std::str;
+use std::path::Path;
 
 #[derive(Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -79,6 +80,37 @@ impl Repository {
         write_empty_repo()?;
 
         Ok(r)
+    }
+
+    /* dud method, should call corresponding method in transport */
+    pub fn from_disc() -> Repository {
+        Repository {
+            current_head: None,
+            heads: Vec::<Commit>::new(),
+            staging_area: vec!["test.txt".to_string(), "test2.txt".to_string()]
+        }
+    }
+
+    /* dud method, should call corresponding method in transport */
+    pub fn update_on_disc(&self) {
+        for f in &self.staging_area {
+            println!("{:?}", f);
+        }
+    }
+
+    pub fn add_to_staging_area<P: AsRef<Path>>(files: &Vec<P>) -> Result<(), Error> {
+        let mut r = Repository::from_disc();
+
+        for f in files {
+            let s = f.as_ref().to_str().unwrap().to_string();
+            if !r.staging_area.contains(&s) {
+                r.staging_area.push(s);
+            }
+        }
+
+        r.update_on_disc();
+
+        Ok(())
     }
 }
 
