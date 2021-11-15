@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
+use crate::storage::transport::{Error, write_empty_repo};
 
 #[derive(Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -63,9 +64,11 @@ impl Repository {
     }
 
     // creates empty repository and writes it to disc
-    pub fn create_empty() -> Result<Repository, &'static str> {
+    pub fn create_empty() -> Result<Repository, Error> {
         let r = Repository::new();
-        // TODO: write to filesystem and read error value
+        
+        write_empty_repo()?;
+
         Ok(r)
     }
 }
@@ -106,5 +109,16 @@ impl Blob {
 
     pub fn content(&self) -> &[u8] {
         &self.content
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn init_repo_test(){
+        let a1 = Repository::create_empty();
     }
 }

@@ -53,6 +53,15 @@ pub fn write_commit(commit: Commit) -> Result<()> {
     todo!()
 }
 
+/// Writes the DIR structure of an empty repo to disk
+pub fn write_empty_repo() -> Result<()>{
+    
+    fs::create_dir_all(".gnew/objects")?;
+    fs::create_dir(".gnew/heads")?;
+    fs::write(".gnew/HEAD","")?;
+    Ok(())
+}
+
 /// Reads the blob object with the given hash from storage.
 pub fn read_blob(hash: &Hash) -> Result<Blob> {
     let obj = fs::read(object_path(hash)).map_err(|err| match err.kind() {
@@ -82,6 +91,11 @@ fn object_path(hash: &Hash) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn make_empty_repo(){
+        let a1 = write_empty_repo();
+    }
 
     // for now you have to create .gnew/objects before running these tests
     // TODO: run them in a test repo
