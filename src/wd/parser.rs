@@ -1,4 +1,8 @@
-use std::path::PathBuf;
+use crate::repo::command;
+use crate::repo::object::Hash;
+use crate::storage::transport::Result;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
@@ -31,12 +35,12 @@ pub enum Gnew {
     /// Show changes between commits
     Diff {
         #[structopt(max_values = 2)]
-        commits: Vec<String>,
+        commits: Vec<Hash>,
     },
     /// Output a file at a commit
-    Cat { commit: String, path: PathBuf },
+    Cat { commit: Hash, path: PathBuf },
     /// Check out a commit
-    Checkout { commit: String },
+    Checkout { commit: Hash },
     /// Commit changes to the repository
     Commit {
         #[structopt(short)]
@@ -45,13 +49,48 @@ pub enum Gnew {
     /// Show the commit log
     Log,
     /// Merge two commits
-    Merge { commit: String },
+    Merge { commit: Hash },
     /// Pull changes from another repository
     Pull { repository: PathBuf },
     /// Push changes to another repository
     Push { repository: PathBuf },
+
+    // Low-level commands
+    //
+    /// Write a blob object from a file
+    HashFile { path: PathBuf },
+
+    /// Show the content of an object
+    CatObject { object: Hash },
 }
 
 pub fn parse() -> Gnew {
     Gnew::from_args()
+}
+
+pub fn init() -> Result<()> {
+    todo!()
+}
+
+pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
+    command::hash_file(path).map(|blob| println!("{}", blob.hash()))
+}
+
+pub fn cat_object(object: &Hash) -> Result<()> {
+    io::stdout().write_all(&command::cat_object(object)?)?;
+    Ok(())
+}
+
+pub fn main() {
+    let opt = parse();
+    match &opt {
+        Gnew::Init => init(),
+        Gnew::HashFile { path } => hash_file(path),
+        Gnew::CatObject { object } => cat_object(object),
+        _ => todo!(),
+    }
+    .unwrap_or_else(|err| {
+        eprintln!("fatal: {}", err);
+        std::process::exit(1)
+    })
 }

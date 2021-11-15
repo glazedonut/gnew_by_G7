@@ -14,7 +14,7 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
     ObjectNotFound,
     ObjectCorrupted,
-    IOError(io::Error),
+    IoError(io::Error),
 }
 
 impl error::Error for Error {}
@@ -24,14 +24,14 @@ impl fmt::Display for Error {
         match self {
             ObjectNotFound => write!(f, "object not found"),
             ObjectCorrupted => write!(f, "corrupted object"),
-            IOError(error) => write!(f, "IO error: {}", error),
+            IoError(error) => write!(f, "IO error: {}", error),
         }
     }
 }
 
 impl From<io::Error> for Error {
     fn from(err: io::Error) -> Error {
-        Error::IOError(err)
+        IoError(err)
     }
 }
 
@@ -54,11 +54,10 @@ pub fn write_commit(commit: Commit) -> Result<()> {
 }
 
 /// Writes the DIR structure of an empty repo to disk
-pub fn write_empty_repo() -> Result<()>{
-    
+pub fn write_empty_repo() -> Result<()> {
     fs::create_dir_all(".gnew/objects")?;
     fs::create_dir(".gnew/heads")?;
-    fs::write(".gnew/HEAD","")?;
+    fs::write(".gnew/HEAD", "")?;
     Ok(())
 }
 
@@ -93,7 +92,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn make_empty_repo(){
+    fn make_empty_repo() {
         let a1 = write_empty_repo();
     }
 

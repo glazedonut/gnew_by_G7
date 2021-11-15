@@ -1,7 +1,8 @@
+use crate::storage::transport::{write_empty_repo, Error};
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
-use crate::storage::transport::{Error, write_empty_repo};
+use std::str;
 
 #[derive(Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -54,6 +55,14 @@ impl fmt::Display for Hash {
     }
 }
 
+impl str::FromStr for Hash {
+    type Err = sha1::DigestParseError;
+
+    fn from_str(s: &str) -> Result<Hash, sha1::DigestParseError> {
+        Ok(Hash(s.parse()?))
+    }
+}
+
 impl Repository {
     pub fn new() -> Repository {
         Repository {
@@ -66,7 +75,7 @@ impl Repository {
     // creates empty repository and writes it to disc
     pub fn create_empty() -> Result<Repository, Error> {
         let r = Repository::new();
-        
+
         write_empty_repo()?;
 
         Ok(r)
@@ -112,13 +121,12 @@ impl Blob {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn init_repo_test(){
+    fn init_repo_test() {
         let a1 = Repository::create_empty();
     }
 }
