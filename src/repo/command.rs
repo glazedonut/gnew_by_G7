@@ -11,8 +11,9 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     Repository::add_to_tracklist(files)
 }
 pub fn commit(commmitmsg:Option<String>)->Result<()>{
-    let mut cmsg:String="";
+    let mut cmsg:String="".to_string();
     let mut r = Repository::from_disc()?;
+
 
     todo!();
 }
