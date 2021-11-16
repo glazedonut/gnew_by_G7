@@ -8,7 +8,7 @@ pub fn init() -> Result<()> {
 }
 
 pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
-    Repository::add_to_staging_area(files)
+    Repository::add_to_tracklist(files)
 }
 
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {

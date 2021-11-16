@@ -1,4 +1,4 @@
-use crate::storage::transport::{write_empty_repo, Error};
+use crate::storage::transport::{write_empty_repo, write_lines_gen, read_lines_gen, check_existence, Error};
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
@@ -12,7 +12,7 @@ pub struct Hash(sha1::Digest);
 pub struct Repository {
     current_head: Option<Commit>,
     heads: Vec<Commit>,
-    staging_area: Vec<String>,
+    tracklist: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -69,7 +69,7 @@ impl Repository {
         Repository {
             current_head: None,
             heads: Vec::<Commit>::new(),
-            staging_area: Vec::<String>::new(),
+            tracklist: Vec::<String>::new(),
         }
     }
 
@@ -82,33 +82,36 @@ impl Repository {
         Ok(r)
     }
 
-    /* dud method, should call corresponding method in transport */
-    pub fn from_disc() -> Repository {
-        Repository {
+    /* TODO: read head, heads from disc */
+    pub fn from_disc() -> Result<Repository, Error> {
+        Ok(Repository {
             current_head: None,
             heads: Vec::<Commit>::new(),
-            staging_area: vec!["test.txt".to_string(), "test2.txt".to_string()]
-        }
+            tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?
+        })
     }
 
-    /* dud method, should call corresponding method in transport */
-    pub fn update_on_disc(&self) {
-        for f in &self.staging_area {
-            println!("{:?}", f);
-        }
-    }
+    /* adds the specfied files to the tracklist on disc */
+    pub fn add_to_tracklist<P: AsRef<Path>>(files: &Vec<P>) -> Result<(), Error> {
+        /* check that all the specified files exist */
+        check_existence(files)?;
 
-    pub fn add_to_staging_area<P: AsRef<Path>>(files: &Vec<P>) -> Result<(), Error> {
-        let mut r = Repository::from_disc();
+        /* read current state of repository from disc */
+        let mut r = Repository::from_disc()?;
 
+        /* if file isn't tracked already, add it to tracklist
+         * note that this adds directories just like files
+         * during commit, dirs have to be added recursively
+         */
         for f in files {
             let s = f.as_ref().to_str().unwrap().to_string();
-            if !r.staging_area.contains(&s) {
-                r.staging_area.push(s);
+            if !r.tracklist.contains(&s) {
+                r.tracklist.push(s);
             }
         }
 
-        r.update_on_disc();
+        /* write new tracklist to .gnew/tracklist */
+        write_lines_gen(Path::new(".gnew/tracklist"), &r.tracklist)?;
 
         Ok(())
     }

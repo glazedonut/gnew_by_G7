@@ -4,7 +4,7 @@ use crate::repo::object::{Blob, Commit, Hash, Tree};
 use std::error;
 use std::fmt;
 use std::fs;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, BufReader, BufRead};
 use std::path::{Path, PathBuf};
 use std::result;
 
@@ -14,6 +14,7 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
     ObjectNotFound,
     ObjectCorrupted,
+    FileDoesNotExist,
     IoError(io::Error),
 }
 
@@ -24,6 +25,7 @@ impl fmt::Display for Error {
         match self {
             ObjectNotFound => write!(f, "object not found"),
             ObjectCorrupted => write!(f, "corrupted object"),
+            FileDoesNotExist => write!(f, "file does not exist"),
             IoError(error) => write!(f, "IO error: {}", error),
         }
     }
@@ -58,6 +60,14 @@ pub fn write_empty_repo() -> Result<()> {
     fs::create_dir_all(".gnew/objects")?;
     fs::create_dir(".gnew/heads")?;
     fs::write(".gnew/HEAD", "")?;
+    fs::write(".gnew/tracklist", "")?;
+    Ok(())
+}
+
+/* generic line filewriter. can be used to write to tracklist and HEAD files */
+pub fn write_lines_gen<P: AsRef<Path>>(path: P, lines: &Vec<String>) -> Result<()> {
+    let content = lines.join("\n");
+    fs::write(path, content)?;
     Ok(())
 }
 
@@ -79,6 +89,28 @@ pub fn read_tree(hash: &Hash) -> Result<Tree> {
 
 pub fn read_commit(hash: &Hash) -> Result<Commit> {
     todo!()
+}
+
+/* generic line filereader. can be used to read from tracklist and HEAD files */
+pub fn read_lines_gen<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
+    let fd = fs::File::open(path)?;
+    let bufread = BufReader::new(fd);
+    let mut out: Vec<String> = Vec::new();
+
+    for line in bufread.lines() {
+        out.push(line?);
+    }
+
+    Ok(out)
+}
+
+pub fn check_existence<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
+    for f in files {
+        if !f.as_ref().exists() {
+            return Err(FileDoesNotExist);
+        }
+    }
+    Ok(())
 }
 
 fn object_path(hash: &Hash) -> PathBuf {
