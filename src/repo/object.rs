@@ -1,9 +1,9 @@
-use crate::storage::transport::{write_empty_repo, write_lines_gen, read_lines_gen, check_existence, Error};
+use crate::storage::transport::{read_lines_gen, write_empty_repo, Error};
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
-use std::str;
 use std::path::Path;
+use std::str;
 
 #[derive(Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -12,7 +12,7 @@ pub struct Hash(sha1::Digest);
 pub struct Repository {
     current_head: Option<Commit>,
     heads: Vec<Commit>,
-    tracklist: Vec<String>,
+    pub tracklist: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -87,33 +87,8 @@ impl Repository {
         Ok(Repository {
             current_head: None,
             heads: Vec::<Commit>::new(),
-            tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?
+            tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
         })
-    }
-
-    /* adds the specfied files to the tracklist on disc */
-    pub fn add_to_tracklist<P: AsRef<Path>>(files: &Vec<P>) -> Result<(), Error> {
-        /* check that all the specified files exist */
-        check_existence(files)?;
-
-        /* read current state of repository from disc */
-        let mut r = Repository::from_disc()?;
-
-        /* if file isn't tracked already, add it to tracklist
-         * note that this adds directories just like files
-         * during commit, dirs have to be added recursively
-         */
-        for f in files {
-            let s = f.as_ref().to_str().unwrap().to_string();
-            if !r.tracklist.contains(&s) {
-                r.tracklist.push(s);
-            }
-        }
-
-        /* write new tracklist to .gnew/tracklist */
-        write_lines_gen(Path::new(".gnew/tracklist"), &r.tracklist)?;
-
-        Ok(())
     }
 }
 

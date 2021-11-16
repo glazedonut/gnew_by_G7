@@ -4,7 +4,7 @@ use crate::repo::object::{Blob, Commit, Hash, Tree};
 use std::error;
 use std::fmt;
 use std::fs;
-use std::io::{self, ErrorKind, BufReader, BufRead};
+use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::result;
 
