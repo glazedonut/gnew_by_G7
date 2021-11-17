@@ -60,12 +60,17 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
-pub fn commit(commmitmsg: Option<String>) -> Result<()> {
-    let mut cmsg: String = "".to_string();
+pub fn commit(commitmsg: Option<String>) -> Result<()> {
+    let mut cmsg: Option<String> = Some("".to_string());
+    match commitmsg {
+        Some(c) => cmsg = Some(c),
+        None => cmsg = Some("".to_string()),
+    };
     let mut r = Repository::from_disc()?;
 
     todo!();
 }
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {
     transport::write_blob(path)
 }
@@ -74,6 +79,7 @@ pub fn cat_object(object: &Hash) -> Result<Vec<u8>> {
     transport::read_blob(object).map(|blob| blob.content().into())
 }
 
+/* check that a direntry starts with a . */
 fn is_hidden(entry: &DirEntry) -> bool {
     println!("{:?}", entry.path().to_str());
     entry
