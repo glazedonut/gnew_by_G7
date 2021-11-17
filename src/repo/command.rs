@@ -39,7 +39,7 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
 
                 /* only add files, not directory names */
                 let p_md = metadata(path).unwrap();
-                if (p_md.is_file()) {
+                if p_md.is_file() {
                     paths.push(path.to_str().unwrap().to_string());
                 }
             }
@@ -76,7 +76,7 @@ pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {
 }
 
 pub fn cat_object(object: &Hash) -> Result<Vec<u8>> {
-    transport::read_blob(object).map(|blob| blob.content().into())
+    transport::read_blob(object).map(|blob| blob.into())
 }
 
 /* check that a direntry starts with a . */

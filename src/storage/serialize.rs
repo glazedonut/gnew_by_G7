@@ -22,7 +22,7 @@ pub fn serialize_commit(commit: &mut Commit) -> Vec<u8> {
 /// Returns None if obj is not a valid blob object.
 pub fn deserialize_blob(obj: &[u8]) -> Option<Blob> {
     obj.strip_prefix(b"blob\0").map(|content| {
-        let mut blob = Blob::with_content(content.to_vec());
+        let mut blob = Blob::new(content.to_vec());
         blob.update_hash(obj);
         blob
     })
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn serde_blob() {
-        let mut b1 = Blob::with_content(b"hello world".to_vec());
+        let mut b1 = Blob::new(b"hello world".to_vec());
         let b2 = deserialize_blob(&serialize_blob(&mut b1)).unwrap();
         assert_eq!(b1, b2);
     }

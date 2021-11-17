@@ -39,7 +39,7 @@ impl From<io::Error> for Error {
 
 /// Creates and writes a blob object from the contents of a file.
 pub fn write_blob<P: AsRef<Path>>(path: P) -> Result<Blob> {
-    let mut blob = Blob::with_content(fs::read(path)?);
+    let mut blob = Blob::new(fs::read(path)?);
     let obj = serialize_blob(&mut blob);
     fs::write(object_path(blob.hash()), obj)?;
     Ok(blob)

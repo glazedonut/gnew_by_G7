@@ -36,7 +36,6 @@ pub struct Tree {
 #[derive(Debug, PartialEq)]
 pub struct Blob {
     hash: Hash,
-    name: Option<String>,
     content: Vec<u8>,
 }
 
@@ -93,18 +92,9 @@ impl Repository {
 }
 
 impl Blob {
-    pub fn new() -> Blob {
+    pub fn new(content: Vec<u8>) -> Blob {
         Blob {
             hash: Hash::new(),
-            name: None,
-            content: Vec::<u8>::new(),
-        }
-    }
-
-    pub fn with_content(content: Vec<u8>) -> Blob {
-        Blob {
-            hash: Hash::new(),
-            name: None,
             content,
         }
     }
@@ -116,14 +106,6 @@ impl Blob {
     /// Set the hash to the hash of data.
     pub fn update_hash(&mut self, data: &[u8]) {
         self.hash.update(data)
-    }
-
-    pub fn create_hash(&mut self) {
-        self.hash.update(&self.content)
-    }
-
-    pub fn name(&self) -> Option<&String> {
-        self.name.as_ref()
     }
 
     pub fn content(&self) -> &[u8] {
