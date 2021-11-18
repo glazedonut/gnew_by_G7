@@ -88,18 +88,18 @@ pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     command::hash_file(path).map(|blob| println!("{}", blob.hash()))
 }
 
-pub fn cat_object(object: &Hash) -> Result<()> {
+pub fn cat_object(object: Hash) -> Result<()> {
     io::stdout().write_all(&command::cat_object(object)?)?;
     Ok(())
 }
 
 pub fn main() {
     let opt = parse();
-    match &opt {
+    match opt {
         Gnew::Init => init(),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::CatObject { object } => cat_object(object),
-        Gnew::Add { paths } => add(paths),
+        Gnew::Add { paths } => add(&paths),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

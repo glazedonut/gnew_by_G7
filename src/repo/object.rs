@@ -5,7 +5,7 @@ use std::fmt;
 use std::path::Path;
 use std::str;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
 
 #[derive(Debug)]
@@ -110,8 +110,8 @@ impl Tree {
         }
     }
 
-    pub fn hash(&self) -> &Hash {
-        &self.hash
+    pub fn hash(&self) -> Hash {
+        self.hash
     }
 
     /// Set the hash to the hash of data.
@@ -147,8 +147,8 @@ impl TreeEntry {
         self.kind
     }
 
-    pub fn hash(&self) -> &Hash {
-        &self.hash
+    pub fn hash(&self) -> Hash {
+        self.hash
     }
 
     pub fn name(&self) -> &str {
@@ -173,8 +173,8 @@ impl Blob {
         }
     }
 
-    pub fn hash(&self) -> &Hash {
-        &self.hash
+    pub fn hash(&self) -> Hash {
+        self.hash
     }
 
     /// Set the hash to the hash of data.

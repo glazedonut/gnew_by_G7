@@ -56,7 +56,7 @@ pub fn write_commit(commit: &mut Commit) -> Result<()> {
     todo!()
 }
 
-fn write_object(hash: &Hash, obj: &[u8]) -> Result<()> {
+fn write_object(hash: Hash, obj: &[u8]) -> Result<()> {
     let path = object_path(hash);
     if !path.exists() {
         fs::write(path, obj)?;
@@ -81,7 +81,7 @@ pub fn write_lines_gen<P: AsRef<Path>>(path: P, lines: &Vec<String>) -> Result<(
 }
 
 /// Reads the blob object with the given hash from storage.
-pub fn read_blob(hash: &Hash) -> Result<Blob> {
+pub fn read_blob(hash: Hash) -> Result<Blob> {
     match deserialize_blob(&read_object(hash)?) {
         Some(blob) if blob.hash() == hash => Ok(blob),
         _ => Err(ObjectCorrupted),
@@ -89,18 +89,18 @@ pub fn read_blob(hash: &Hash) -> Result<Blob> {
 }
 
 /// Reads the tree object with the given hash from storage.
-pub fn read_tree(hash: &Hash) -> Result<Tree> {
+pub fn read_tree(hash: Hash) -> Result<Tree> {
     match deserialize_tree(&read_object(hash)?) {
         Some(tree) if tree.hash() == hash => Ok(tree),
         _ => Err(ObjectCorrupted),
     }
 }
 
-pub fn read_commit(hash: &Hash) -> Result<Commit> {
+pub fn read_commit(hash: Hash) -> Result<Commit> {
     todo!()
 }
 
-fn read_object(hash: &Hash) -> Result<Vec<u8>> {
+fn read_object(hash: Hash) -> Result<Vec<u8>> {
     fs::read(object_path(hash)).map_err(|err| match err.kind() {
         ErrorKind::NotFound => ObjectNotFound,
         _ => err.into(),
@@ -129,7 +129,7 @@ pub fn check_existence<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
-fn object_path(hash: &Hash) -> PathBuf {
+fn object_path(hash: Hash) -> PathBuf {
     let mut path = PathBuf::from(".gnew/objects");
     path.push(hash.to_string());
     path

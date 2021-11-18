@@ -105,8 +105,8 @@ mod tests {
         let mut foo = Blob::new(b"foo".to_vec());
         serialize_blob(&mut foo);
         serialize_blob(&mut bar);
-        t1.add_blob(bar.hash().clone(), "bar.txt".to_owned());
-        t1.add_blob(foo.hash().clone(), "foo.txt".to_owned());
+        t1.add_blob(bar.hash(), "bar.txt".to_owned());
+        t1.add_blob(foo.hash(), "foo.txt".to_owned());
 
         let obj = serialize_tree(&mut t1);
         let expected = format!(

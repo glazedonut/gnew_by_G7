@@ -75,7 +75,7 @@ pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<Blob> {
     transport::write_blob(path)
 }
 
-pub fn cat_object(object: &Hash) -> Result<Vec<u8>> {
+pub fn cat_object(object: Hash) -> Result<Vec<u8>> {
     transport::read_blob(object).map(|blob| blob.into())
 }
 
