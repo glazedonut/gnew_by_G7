@@ -1,5 +1,5 @@
 use self::Error::*;
-use super::serialize::{deserialize_blob, serialize_blob};
+use super::serialize::{deserialize_blob, deserialize_tree, serialize_blob, serialize_tree};
 use crate::repo::object::{Blob, Commit, Hash, Tree};
 use std::error;
 use std::fmt;
@@ -41,18 +41,27 @@ impl From<io::Error> for Error {
 pub fn write_blob<P: AsRef<Path>>(path: P) -> Result<Blob> {
     let mut blob = Blob::new(fs::read(path)?);
     let obj = serialize_blob(&mut blob);
-    fs::write(object_path(blob.hash()), obj)?;
+    write_object(blob.hash(), &obj)?;
     Ok(blob)
 }
 
 /// Updates the hash of a tree object and writes it to storage.
-pub fn write_tree(tree: Tree) -> Result<()> {
-    todo!()
+pub fn write_tree(tree: &mut Tree) -> Result<()> {
+    let obj = serialize_tree(tree);
+    write_object(tree.hash(), &obj)
 }
 
 /// Updates the hash of a commit object and writes it to storage.
-pub fn write_commit(commit: Commit) -> Result<()> {
+pub fn write_commit(commit: &mut Commit) -> Result<()> {
     todo!()
+}
+
+fn write_object(hash: &Hash, obj: &[u8]) -> Result<()> {
+    let path = object_path(hash);
+    if !path.exists() {
+        fs::write(path, obj)?;
+    }
+    Ok(())
 }
 
 /// Writes the DIR structure of an empty repo to disk
@@ -73,22 +82,29 @@ pub fn write_lines_gen<P: AsRef<Path>>(path: P, lines: &Vec<String>) -> Result<(
 
 /// Reads the blob object with the given hash from storage.
 pub fn read_blob(hash: &Hash) -> Result<Blob> {
-    let obj = fs::read(object_path(hash)).map_err(|err| match err.kind() {
-        ErrorKind::NotFound => ObjectNotFound,
-        _ => err.into(),
-    })?;
-    match deserialize_blob(&obj) {
+    match deserialize_blob(&read_object(hash)?) {
         Some(blob) if blob.hash() == hash => Ok(blob),
         _ => Err(ObjectCorrupted),
     }
 }
 
+/// Reads the tree object with the given hash from storage.
 pub fn read_tree(hash: &Hash) -> Result<Tree> {
-    todo!()
+    match deserialize_tree(&read_object(hash)?) {
+        Some(tree) if tree.hash() == hash => Ok(tree),
+        _ => Err(ObjectCorrupted),
+    }
 }
 
 pub fn read_commit(hash: &Hash) -> Result<Commit> {
     todo!()
+}
+
+fn read_object(hash: &Hash) -> Result<Vec<u8>> {
+    fs::read(object_path(hash)).map_err(|err| match err.kind() {
+        ErrorKind::NotFound => ObjectNotFound,
+        _ => err.into(),
+    })
 }
 
 /* generic line filereader. can be used to read from tracklist and HEAD files */

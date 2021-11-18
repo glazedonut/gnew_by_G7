@@ -5,7 +5,7 @@ use std::fmt;
 use std::path::Path;
 use std::str;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
 
 #[derive(Debug)]
@@ -28,9 +28,20 @@ pub struct Commit {
 #[derive(Debug, PartialEq)]
 pub struct Tree {
     hash: Hash,
-    name: Option<String>,
-    trees: Option<Vec<Tree>>,
-    blobs: Option<Vec<Blob>>,
+    entries: Vec<TreeEntry>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct TreeEntry {
+    kind: TreeEntryKind,
+    hash: Hash,
+    name: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TreeEntryKind {
+    Blob,
+    Tree,
 }
 
 #[derive(Debug, PartialEq)]
@@ -88,6 +99,69 @@ impl Repository {
             heads: Vec::<Commit>::new(),
             tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
         })
+    }
+}
+
+impl Tree {
+    pub fn new() -> Tree {
+        Tree {
+            hash: Hash::new(),
+            entries: vec![],
+        }
+    }
+
+    pub fn hash(&self) -> &Hash {
+        &self.hash
+    }
+
+    /// Set the hash to the hash of data.
+    pub fn update_hash(&mut self, data: &[u8]) {
+        self.hash.update(data)
+    }
+
+    pub fn entries(&self) -> &[TreeEntry] {
+        &self.entries
+    }
+
+    /// Add a blob entry with the given hash and filename.
+    pub fn add_blob(&mut self, hash: Hash, name: String) {
+        self.entries.push(TreeEntry {
+            kind: TreeEntryKind::Blob,
+            hash,
+            name,
+        })
+    }
+
+    /// Add a tree entry with the given hash and filename.
+    pub fn add_tree(&mut self, hash: Hash, name: String) {
+        self.entries.push(TreeEntry {
+            kind: TreeEntryKind::Tree,
+            hash,
+            name,
+        })
+    }
+}
+
+impl TreeEntry {
+    pub fn kind(&self) -> TreeEntryKind {
+        self.kind
+    }
+
+    pub fn hash(&self) -> &Hash {
+        &self.hash
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+}
+
+impl fmt::Display for TreeEntryKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            TreeEntryKind::Blob => write!(f, "blob"),
+            TreeEntryKind::Tree => write!(f, "tree"),
+        }
     }
 }
 
