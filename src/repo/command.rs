@@ -1,4 +1,4 @@
-use crate::repo::object::Repository;
+use crate::repo::object::{Repository, Hash, Tree};
 use crate::storage::transport::{self, Result};
 use std::fs::metadata;
 use std::path::Path;
@@ -60,16 +60,7 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
-pub fn commit(commitmsg: Option<String>) -> Result<()> {
-    let mut cmsg: Option<String> = Some("".to_string());
-    match commitmsg {
-        Some(c) => cmsg = Some(c),
-        None => cmsg = Some("".to_string()),
-    };
-    let mut r = Repository::from_disc()?;
 
-    todo!();
-}
 
 /* check that a direntry starts with a . */
 fn is_hidden(entry: &DirEntry) -> bool {
