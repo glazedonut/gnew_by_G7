@@ -1,9 +1,13 @@
-use crate::storage::transport::{read_lines_gen, write_empty_repo, Error};
+use crate::storage::transport::Error::IoError;
+use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result};
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
+use std::iter::Peekable;
 use std::path::Path;
+use std::result;
 use std::str;
+use walkdir::{self, DirEntry, WalkDir};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -69,7 +73,7 @@ impl fmt::Display for Hash {
 impl str::FromStr for Hash {
     type Err = sha1::DigestParseError;
 
-    fn from_str(s: &str) -> Result<Hash, sha1::DigestParseError> {
+    fn from_str(s: &str) -> result::Result<Hash, sha1::DigestParseError> {
         Ok(Hash(s.parse()?))
     }
 }
@@ -84,7 +88,7 @@ impl Repository {
     }
 
     // creates empty repository and writes it to disc
-    pub fn create_empty() -> Result<Repository, Error> {
+    pub fn create_empty() -> Result<Repository> {
         let r = Repository::new();
 
         write_empty_repo()?;
@@ -93,12 +97,62 @@ impl Repository {
     }
 
     /* TODO: read head, heads from disc */
-    pub fn from_disc() -> Result<Repository, Error> {
+    pub fn from_disc() -> Result<Repository> {
         Ok(Repository {
             current_head: None,
             heads: Vec::<Commit>::new(),
             tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
         })
+    }
+
+    /// Checks if a file is tracked.
+    pub fn is_tracked(&self, path: &Path) -> bool {
+        self.tracklist.contains(&path.to_str().unwrap().to_owned())
+    }
+
+    /// Writes a tree object from the working directory.
+    pub fn write_tree(&self) -> Result<Tree> {
+        let mut walker = WalkDir::new(".")
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| !e.path().starts_with("./.gnew"))
+            .peekable();
+
+        let mut tree = self.write_tree_rec(&mut walker, 1)?;
+        transport::write_tree(&mut tree)?;
+        Ok(tree)
+    }
+
+    fn write_tree_rec<I>(&self, walkdir: &mut Peekable<I>, depth: usize) -> Result<Tree>
+    where
+        I: Iterator<Item = walkdir::Result<DirEntry>>,
+    {
+        let mut tree = Tree::new();
+        loop {
+            let entry = match walkdir.next() {
+                None => break,
+                Some(Err(err)) => return Err(IoError(err.into())),
+                Some(Ok(entry)) => entry,
+            };
+            let path = entry.path().strip_prefix(".").unwrap();
+            let fname = entry.file_name().to_str().unwrap().to_owned();
+
+            if entry.file_type().is_dir() {
+                let mut subtree = self.write_tree_rec(walkdir, depth + 1)?;
+                if !subtree.is_empty() {
+                    transport::write_tree(&mut subtree)?;
+                    tree.add_tree(subtree.hash(), fname)
+                }
+            } else if self.is_tracked(path) {
+                tree.add_blob(transport::write_blob(path)?.hash(), fname)
+            }
+            // have we reached the end of the directory?
+            match walkdir.peek() {
+                Some(Ok(next)) if depth > next.depth() => break,
+                _ => (),
+            }
+        }
+        Ok(tree)
     }
 }
 
@@ -123,6 +177,10 @@ impl Tree {
         &self.entries
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Add a blob entry with the given hash and filename.
     pub fn add_blob(&mut self, hash: Hash, name: String) {
         self.entries.push(TreeEntry {
@@ -139,6 +197,15 @@ impl Tree {
             hash,
             name,
         })
+    }
+}
+
+impl fmt::Display for Tree {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for entry in self.entries() {
+            write!(f, "{} {}\t{}\n", entry.kind(), entry.hash(), entry.name())?
+        }
+        Ok(())
     }
 }
 

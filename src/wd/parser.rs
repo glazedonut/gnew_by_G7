@@ -1,6 +1,6 @@
 use crate::repo::command;
-use crate::repo::object::Hash;
-use crate::storage::transport::Result;
+use crate::repo::object::{Hash, Repository};
+use crate::storage::transport::{self, Result};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -62,10 +62,15 @@ pub enum Gnew {
         /// The file to hash
         path: PathBuf,
     },
-
+    /// Write a tree object from the working directory
+    WriteTree,
     /// Show the content of an object
     CatObject {
-        /// The object to show
+        /// Object type
+        #[structopt(possible_values = &["blob", "tree", "commit"])]
+        type_: String,
+
+        /// Object hash
         object: Hash,
     },
 }
@@ -85,11 +90,25 @@ pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
 }
 
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
-    command::hash_file(path).map(|blob| println!("{}", blob.hash()))
+    println!("{}", transport::write_blob(path)?.hash());
+    Ok(())
 }
 
-pub fn cat_object(object: Hash) -> Result<()> {
-    io::stdout().write_all(&command::cat_object(object)?)?;
+pub fn write_tree() -> Result<()> {
+    println!("{}", Repository::from_disc()?.write_tree()?.hash());
+    Ok(())
+}
+
+pub fn cat_object(type_: &str, object: Hash) -> Result<()> {
+    match type_ {
+        "blob" => {
+            let blob = transport::read_blob(object)?;
+            io::stdout().write_all(blob.content())?;
+        }
+        "tree" => print!("{}", transport::read_tree(object)?),
+        "commit" => todo!(),
+        _ => panic!("invalid object type"),
+    };
     Ok(())
 }
 
@@ -97,9 +116,10 @@ pub fn main() {
     let opt = parse();
     match opt {
         Gnew::Init => init(),
-        Gnew::HashFile { path } => hash_file(path),
-        Gnew::CatObject { object } => cat_object(object),
         Gnew::Add { paths } => add(&paths),
+        Gnew::HashFile { path } => hash_file(path),
+        Gnew::WriteTree => write_tree(),
+        Gnew::CatObject { type_, object } => cat_object(&type_, object),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {
