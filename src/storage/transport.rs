@@ -119,6 +119,19 @@ fn object_path(hash: &Hash) -> PathBuf {
     path
 }
 
+pub fn read_tracklist() -> Result<Vec<String>>
+{
+    let path = PathBuf::from(".gnew/tracklist");
+    read_lines_gen(path)
+}
+
+pub fn write_tracklist(lines: &Vec<String>) -> Result<()>
+{
+    let path = PathBuf::from(".gnew/tracklist");
+    write_lines_gen(path, lines)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
