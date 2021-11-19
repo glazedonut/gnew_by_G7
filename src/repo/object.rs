@@ -1,11 +1,14 @@
-use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result};
-use chrono::{DateTime, Utc};
+use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result, write_tree, Error};
+use chrono::{DateTime, Utc, TimeZone};
 use sha1::{self, Sha1};
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::result;
 use std::str;
+
+
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -138,6 +141,31 @@ impl Repository {
         }
         Ok(tree)
     }
+    pub fn commit(commitmsg: Option<String>) -> Result<()> {
+        let mut cmsg: Option<String> = Some("".to_string());
+        match commitmsg {
+            Some(ref c) => cmsg = Some(c.to_string()),
+            None => cmsg = Some("".to_string()),
+        };
+        let mut r = Repository::from_disc()?;
+
+
+        let newparent:Option<Hash> =match r.current_head{
+            None => {None}
+            Some(ref c) => {Some(c.hash)}
+        };
+        let newtree:Result<Tree>=Repository::write_tree(&r);
+        let treehash= match newtree{
+            Ok(c) => {c.hash}
+            Err(..) => {Hash::new()}
+        };
+        // let user = get_user_by_uid(get_current_uid()).unwrap();
+        // println!("Hello, {}!", user.name().to_string_lossy());
+        //let mut date:DateTime<Utc>=Utc.timestamp();
+
+        Ok(())
+    }
+
 }
 
 impl Tree {
