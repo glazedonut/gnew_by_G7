@@ -101,12 +101,9 @@ pub fn write_tree() -> Result<()> {
 
 pub fn cat_object(type_: &str, object: Hash) -> Result<()> {
     match type_ {
-        "blob" => {
-            let blob = transport::read_blob(object)?;
-            io::stdout().write_all(blob.content())?;
-        }
+        "blob" => io::stdout().write_all(transport::read_blob(object)?.content())?,
         "tree" => print!("{}", transport::read_tree(object)?),
-        "commit" => todo!(),
+        "commit" => print!("{}", transport::read_commit(object)?),
         _ => panic!("invalid object type"),
     };
     Ok(())

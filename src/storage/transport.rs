@@ -1,5 +1,5 @@
 use self::Error::*;
-use super::serialize::{deserialize_blob, deserialize_tree, serialize_blob, serialize_tree};
+use super::serialize::*;
 use crate::repo::object::{Blob, Commit, Hash, Tree};
 use std::error;
 use std::fmt;
@@ -53,7 +53,8 @@ pub fn write_tree(tree: &mut Tree) -> Result<()> {
 
 /// Updates the hash of a commit object and writes it to storage.
 pub fn write_commit(commit: &mut Commit) -> Result<()> {
-    todo!()
+    let obj = serialize_commit(commit);
+    write_object(commit.hash(), &obj)
 }
 
 fn write_object(hash: Hash, obj: &[u8]) -> Result<()> {
@@ -96,8 +97,12 @@ pub fn read_tree(hash: Hash) -> Result<Tree> {
     }
 }
 
+/// Reads the commit object with the given hash from storage.
 pub fn read_commit(hash: Hash) -> Result<Commit> {
-    todo!()
+    match deserialize_commit(&read_object(hash)?) {
+        Some(commit) if commit.hash() == hash => Ok(commit),
+        _ => Err(ObjectCorrupted),
+    }
 }
 
 fn read_object(hash: Hash) -> Result<Vec<u8>> {
@@ -135,18 +140,15 @@ fn object_path(hash: Hash) -> PathBuf {
     path
 }
 
-pub fn read_tracklist() -> Result<Vec<String>>
-{
+pub fn read_tracklist() -> Result<Vec<String>> {
     let path = PathBuf::from(".gnew/tracklist");
     read_lines_gen(path)
 }
 
-pub fn write_tracklist(lines: &Vec<String>) -> Result<()>
-{
+pub fn write_tracklist(lines: &Vec<String>) -> Result<()> {
     let path = PathBuf::from(".gnew/tracklist");
     write_lines_gen(path, lines)
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -154,7 +156,7 @@ mod tests {
 
     #[test]
     fn make_empty_repo() {
-        let a1 = write_empty_repo();
+        let _a1 = write_empty_repo();
     }
 
     // for now you have to create .gnew/objects before running these tests

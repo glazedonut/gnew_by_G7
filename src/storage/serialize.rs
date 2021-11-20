@@ -1,4 +1,6 @@
-use crate::repo::object::{Blob, Commit, Tree};
+use crate::repo::object::{Blob, Commit, CommitInfo, Tree};
+use chrono::{TimeZone, Utc};
+use std::str::FromStr;
 
 // Length of the string representation of a hash.
 const HASH_LENGTH: usize = 40;
@@ -31,7 +33,10 @@ pub fn serialize_tree(tree: &mut Tree) -> Vec<u8> {
 
 /// Serializes a commit object and updates its hash.
 pub fn serialize_commit(commit: &mut Commit) -> Vec<u8> {
-    todo!()
+    // commit format: `commit<NUL><commit>`
+    let obj = format!("commit\0{}", commit).into_bytes();
+    commit.update_hash(&obj);
+    obj
 }
 
 /// Deserializes a blob object.
@@ -47,11 +52,12 @@ pub fn deserialize_blob(obj: &[u8]) -> Option<Blob> {
 /// Deserializes a tree object.
 /// Returns None if obj is not a valid tree object.
 pub fn deserialize_tree(obj: &[u8]) -> Option<Tree> {
-    obj.strip_prefix(b"tree\0").and_then(|entries| {
-        let mut tree = deserialize_tree_entries(entries)?;
-        tree.update_hash(obj);
-        Some(tree)
-    })
+    let mut tree = obj
+        .strip_prefix(b"tree\0")
+        .and_then(deserialize_tree_entries)?;
+
+    tree.update_hash(obj);
+    Some(tree)
 }
 
 fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
@@ -64,9 +70,8 @@ fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
     it.try_fold(first, |a, b| {
         let (kind, name) = (a.get(..4)?, a.get(5..)?);
         let (hash, next) = (b.get(..HASH_LENGTH)?, b.get(HASH_LENGTH..)?);
-        let name = String::from_utf8(name.to_vec()).ok()?;
-        let hash = String::from_utf8(hash.to_vec()).ok()?;
-        let hash = hash.parse().ok()?;
+        let name = parse_string(name)?;
+        let hash = parse_from_utf8(hash)?;
         match kind {
             b"blob" => tree.add_blob(hash, name),
             b"tree" => tree.add_tree(hash, name),
@@ -80,12 +85,50 @@ fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
 /// Deserializes a commit object.
 /// Returns None if obj is not a valid commit object.
 pub fn deserialize_commit(obj: &[u8]) -> Option<Commit> {
-    todo!()
+    let mut commit = obj
+        .strip_prefix(b"commit\0")
+        .and_then(deserialize_commit_data)?;
+
+    commit.update_hash(obj);
+    Some(commit)
+}
+
+fn deserialize_commit_data(obj: &[u8]) -> Option<Commit> {
+    let mut it = obj.split(|&b| b == b'\n');
+    let tree = parse_from_utf8(it.next()?.strip_prefix(b"tree ")?)?;
+    let parent = match it.next()?.strip_prefix(b"parent ") {
+        None => None,
+        Some(b) => Some(parse_from_utf8(b)?),
+    };
+    let author = parse_string(it.next()?.strip_prefix(b"author ")?)?;
+    let time = parse_from_utf8(it.next()?.strip_prefix(b"time ")?)?;
+    let time = Utc.timestamp_millis(time);
+    it.next()?;
+    let msg = parse_string(it.next()?)?;
+    if !it.next()?.is_empty() {
+        return None;
+    }
+    Some(Commit::new(CommitInfo {
+        tree,
+        parent,
+        author,
+        time,
+        msg,
+    }))
+}
+
+fn parse_from_utf8<T: FromStr>(b: &[u8]) -> Option<T> {
+    parse_string(b)?.parse().ok()
+}
+
+fn parse_string(b: &[u8]) -> Option<String> {
+    String::from_utf8(b.to_vec()).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::repo::object::Hash;
 
     #[test]
     fn serde_blob() {
@@ -118,5 +161,22 @@ mod tests {
 
         let t2 = deserialize_tree(&obj).unwrap();
         assert_eq!(t1, t2);
+    }
+
+    #[test]
+    fn serde_commit() {
+        let mut c1 = Commit::new(CommitInfo {
+            tree: Hash::new(),
+            parent: Some(Hash::new()),
+            author: "paul".to_owned(),
+            time: Utc.timestamp_millis(1637385703000),
+            msg: "write some code".to_owned(),
+        });
+
+        let obj = serialize_commit(&mut c1);
+        assert_eq!(obj, format!("commit\0{}", c1).into_bytes());
+
+        let c2 = deserialize_commit(&obj).unwrap();
+        assert_eq!(c1, c2);
     }
 }

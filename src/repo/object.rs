@@ -27,6 +27,16 @@ pub struct Commit {
     msg: String,
 }
 
+/// Commit metadata used to create a commit object.
+#[derive(Debug, PartialEq)]
+pub struct CommitInfo {
+    pub tree: Hash,
+    pub parent: Option<Hash>,
+    pub author: String,
+    pub time: DateTime<Utc>,
+    pub msg: String,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Tree {
     hash: Hash,
@@ -167,6 +177,68 @@ impl Repository {
     */
 }
 
+impl Commit {
+    pub fn new(info: CommitInfo) -> Commit {
+        Commit {
+            hash: Hash::new(),
+            tree: info.tree,
+            parent: info.parent,
+            author: info.author,
+            time: info.time,
+            msg: info.msg,
+        }
+    }
+
+    pub fn hash(&self) -> Hash {
+        self.hash
+    }
+
+    /// Set the hash to the hash of data.
+    pub fn update_hash(&mut self, data: &[u8]) {
+        self.hash.update(data)
+    }
+
+    pub fn tree(&self) -> Hash {
+        self.tree
+    }
+
+    pub fn parent(&self) -> Option<Hash> {
+        self.parent
+    }
+
+    pub fn author(&self) -> &str {
+        &self.author
+    }
+
+    pub fn time(&self) -> DateTime<Utc> {
+        self.time
+    }
+
+    pub fn msg(&self) -> &str {
+        &self.msg
+    }
+}
+
+impl fmt::Display for Commit {
+    /// Formats a commit object in a format suitable for serialization.
+    ///
+    /// tree <tree hash>
+    /// [parent <parent hash>]
+    /// author <author name>
+    /// time <timestamp>
+    ///
+    /// <commit message>
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "tree {}\n", self.tree)?;
+
+        if let Some(parent) = self.parent {
+            write!(f, "parent {}\n", parent)?;
+        }
+        write!(f, "author {}\n", self.author)?;
+        write!(f, "time {}\n\n{}\n", self.time.timestamp_millis(), self.msg)
+    }
+}
+
 impl Tree {
     pub fn new() -> Tree {
         Tree {
@@ -213,7 +285,7 @@ impl Tree {
 
 impl fmt::Display for Tree {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for entry in self.entries() {
+        for entry in &self.entries {
             write!(f, "{} {}\t{}\n", entry.kind(), entry.hash(), entry.name())?
         }
         Ok(())
@@ -271,6 +343,6 @@ mod tests {
 
     #[test]
     fn init_repo_test() {
-        let a1 = Repository::create_empty();
+        let _a1 = Repository::create_empty();
     }
 }
