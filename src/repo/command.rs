@@ -1,4 +1,4 @@
-use crate::repo::object::{Repository, Hash, Tree};
+use crate::repo::object::Repository;
 use crate::storage::transport::{self, Result};
 use std::fs::metadata;
 use std::path::Path;
@@ -59,8 +59,6 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
 
     Ok(())
 }
-
-
 
 /* check that a direntry starts with a . */
 fn is_hidden(entry: &DirEntry) -> bool {

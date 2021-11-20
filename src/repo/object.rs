@@ -1,14 +1,11 @@
-use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result, write_tree, Error};
-use chrono::{DateTime, Utc, TimeZone};
+use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result};
+use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::result;
 use std::str;
-
-
-
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -141,6 +138,8 @@ impl Repository {
         }
         Ok(tree)
     }
+
+    /*
     pub fn commit(commitmsg: Option<String>) -> Result<()> {
         let mut cmsg: Option<String> = Some("".to_string());
         match commitmsg {
@@ -165,7 +164,7 @@ impl Repository {
 
         Ok(())
     }
-
+    */
 }
 
 impl Tree {
