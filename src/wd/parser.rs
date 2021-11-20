@@ -42,10 +42,7 @@ pub enum Gnew {
     /// Check out a commit
     Checkout { commit: Hash },
     /// Commit changes to the repository
-    Commit {
-        #[structopt(short)]
-        message: Option<String>,
-    },
+    Commit { message: String },
     /// Show the commit log
     Log,
     /// Merge two commits
