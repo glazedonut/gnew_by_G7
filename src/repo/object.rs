@@ -1,15 +1,19 @@
-use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result, write_commit};
-
-use chrono::{DateTime, Utc, TimeZone};
+use crate::storage::serialize::serialize_blob;
+use crate::storage::transport::Error::*;
+use crate::storage::transport::{self, read_lines_gen, write_commit, write_empty_repo, Result};
+use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
+use std::env;
+use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::result;
-use std::env;
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::vec;
 
+const MAX_TREE_DEPTH: usize = 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -48,7 +52,7 @@ pub struct Tree {
     entries: Vec<TreeEntry>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TreeEntry {
     kind: TreeEntryKind,
     hash: Hash,
@@ -61,6 +65,14 @@ pub enum TreeEntryKind {
     Tree,
 }
 
+/// A file stored in a tree object.
+#[derive(Debug, PartialEq)]
+pub struct File {
+    pub path: PathBuf,
+    pub hash: Hash,
+}
+
+/// The hashed contents of a file.
 #[derive(Debug, PartialEq)]
 pub struct Blob {
     hash: Hash,
@@ -97,7 +109,7 @@ impl Repository {
             current_head: None,
             heads: Vec::<(String, Hash)>::new(),
             tracklist: Vec::<String>::new(),
-            detached: false
+            detached: false,
         }
     }
 
@@ -117,7 +129,7 @@ impl Repository {
             current_head: Some(head.0),
             heads: transport::read_heads()?,
             tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
-            detached: head.1
+            detached: head.1,
         })
     }
 
@@ -161,53 +173,48 @@ impl Repository {
         Ok(tree)
     }
 
-
     pub fn commit(commitmsg: Option<String>) -> Result<()> {
         let mut _cmsg: String = "".to_string();
-        _cmsg=match commitmsg {
-            Some(ref c) =>c.to_string(),
+        _cmsg = match commitmsg {
+            Some(ref c) => c.to_string(),
             None => "".to_string(),
         };
         let r = Repository::from_disc()?;
 
-
-        let _newparent:Option<Hash> =match r.current_head{
-            None => {None}
-            Some(ref c) => {Some(*c)}
+        let _newparent: Option<Hash> = match r.current_head {
+            None => None,
+            Some(ref c) => Some(*c),
         };
-        let newtree:Result<Tree>=Repository::write_tree(&r);
-        let _treehash= match newtree{
-            Ok(c) => {c.hash}
-            Err(..) => {Hash::new()}
+        let newtree: Result<Tree> = Repository::write_tree(&r);
+        let _treehash = match newtree {
+            Ok(c) => c.hash,
+            Err(..) => Hash::new(),
         };
-        let time=SystemTime::now().duration_since(UNIX_EPOCH);
-        let currtime = match time{
-            Ok(c) => {c.as_millis()}
-            Err(_) => {0}
+        let time = SystemTime::now().duration_since(UNIX_EPOCH);
+        let currtime = match time {
+            Ok(c) => c.as_millis(),
+            Err(_) => 0,
         };
-       let _date:DateTime<Utc>=Utc.timestamp(currtime as i64, 0);
-        let mut user:String="Temp user".to_string();
+        let _date: DateTime<Utc> = Utc.timestamp(currtime as i64, 0);
+        let mut user: String = "Temp user".to_string();
         let env_vars = env::vars();
-        for(key, value) in env_vars.into_iter() {
-            if key=="USER".to_string() {
-                user=value;
+        for (key, value) in env_vars.into_iter() {
+            if key == "USER".to_string() {
+                user = value;
             }
         }
-        let _newcommit=CommitInfo {
+        let _newcommit = CommitInfo {
             tree: _treehash,
             parent: _newparent,
             author: user,
             time: _date,
             msg: _cmsg,
         };
-        let mut commit =Commit::new(_newcommit);
-        let _resultcommit= write_commit(&mut commit);
-
-
+        let mut commit = Commit::new(_newcommit);
+        let _resultcommit = write_commit(&mut commit);
 
         Ok(())
     }
-
 }
 
 impl Commit {
@@ -293,6 +300,10 @@ impl Tree {
         &self.entries
     }
 
+    fn into_entries(self) -> vec::IntoIter<TreeEntry> {
+        self.entries.into_iter()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
@@ -313,6 +324,50 @@ impl Tree {
             hash,
             name,
         })
+    }
+
+    /// Returns a file given its path in the tree.
+    pub fn file<P: AsRef<Path>>(&self, path: P) -> Result<File> {
+        let path = path.as_ref();
+        let parts: Vec<_> = path.iter().collect();
+
+        self.find_entry(&parts).and_then(|e| match e.kind() {
+            TreeEntryKind::Tree => Err(FileNotFound),
+            TreeEntryKind::Blob => Ok(File::new(path.into(), e.hash())),
+        })
+    }
+
+    fn find_entry(&self, path: &[&OsStr]) -> Result<TreeEntry> {
+        match path {
+            [] => Err(FileNotFound),
+            [f] => Ok(self.entry(f)?.to_owned()),
+            [d, path @ ..] => Ok(self.dir(d)?.find_entry(path)?),
+        }
+    }
+
+    fn dir(&self, name: &OsStr) -> Result<Tree> {
+        self.entry(name).and_then(|e| match e.kind() {
+            TreeEntryKind::Blob => Err(FileNotFound),
+            TreeEntryKind::Tree => match transport::read_tree(e.hash()) {
+                Err(ObjectNotFound) => Err(ObjectMissing),
+                r => r,
+            },
+        })
+    }
+
+    fn entry(&self, name: &OsStr) -> Result<&TreeEntry> {
+        self.entries
+            .iter()
+            .find(|&e| e.name() == name)
+            .ok_or(FileNotFound)
+    }
+
+    /// Returns an iterator that recursively visits all files in the tree.
+    pub fn files(&self) -> FileIter {
+        FileIter {
+            stack: vec![self.entries.clone().into_iter()],
+            path: PathBuf::new(),
+        }
     }
 }
 
@@ -348,6 +403,59 @@ impl fmt::Display for TreeEntryKind {
     }
 }
 
+impl File {
+    pub fn new(path: PathBuf, hash: Hash) -> File {
+        File { path, hash }
+    }
+
+    pub fn contents(&self) -> Result<Vec<u8>> {
+        transport::read_blob(self.hash).map(|blob| blob.into())
+    }
+}
+
+/// An iterator over the files in a tree.
+#[derive(Debug)]
+pub struct FileIter {
+    stack: Vec<vec::IntoIter<TreeEntry>>,
+    path: PathBuf,
+}
+
+impl Iterator for FileIter {
+    type Item = Result<File>;
+
+    fn next(&mut self) -> Option<Result<File>> {
+        loop {
+            // infinite loop?
+            assert!(self.stack.len() <= MAX_TREE_DEPTH);
+
+            let entry = match self.stack.last_mut()?.next() {
+                None => {
+                    // end of current tree
+                    self.stack.pop();
+                    self.path.pop();
+                    continue;
+                }
+                Some(entry) => entry,
+            };
+            match entry.kind() {
+                TreeEntryKind::Blob => {
+                    let path = self.path.join(entry.name());
+                    return Some(Ok(File::new(path, entry.hash())));
+                }
+                TreeEntryKind::Tree => match transport::read_tree(entry.hash()) {
+                    Err(ObjectNotFound) => return Some(Err(ObjectMissing)),
+                    Err(err) => return Some(Err(err)),
+                    Ok(tree) => {
+                        self.stack.push(tree.into_entries().into_iter());
+                        self.path.push(entry.name());
+                        continue;
+                    }
+                },
+            }
+        }
+    }
+}
+
 impl Blob {
     pub fn new(content: Vec<u8>) -> Blob {
         Blob {
@@ -367,6 +475,12 @@ impl Blob {
 
     pub fn content(&self) -> &[u8] {
         &self.content
+    }
+}
+
+impl From<Blob> for Vec<u8> {
+    fn from(blob: Blob) -> Vec<u8> {
+        blob.content
     }
 }
 

@@ -14,9 +14,10 @@ pub type Result<T> = result::Result<T, Error>;
 #[derive(Debug)]
 pub enum Error {
     ObjectNotFound,
+    ObjectMissing,
     ObjectCorrupted,
-    FileDoesNotExist,
-    IoError(io::Error)
+    FileNotFound,
+    IoError(io::Error),
 }
 
 impl error::Error for Error {}
@@ -25,8 +26,9 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ObjectNotFound => write!(f, "object not found"),
+            ObjectMissing => write!(f, "missing object"),
             ObjectCorrupted => write!(f, "corrupted object"),
-            FileDoesNotExist => write!(f, "file does not exist"),
+            FileNotFound => write!(f, "file not found"),
             IoError(error) => write!(f, "IO error: {}", error),
         }
     }
@@ -129,7 +131,7 @@ pub fn read_lines_gen<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
 pub fn check_existence<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     for f in files {
         if !f.as_ref().exists() {
-            return Err(FileDoesNotExist);
+            return Err(FileNotFound);
         }
     }
     Ok(())
@@ -156,14 +158,16 @@ pub fn read_curr_head() -> Result<(Hash, bool)> {
     if branch_name.len() == 2 {
         match Hash::from_str(&branch_name.get(1).unwrap()) {
             Ok(h) => Ok((h, true)),
-            _ => Err(ObjectCorrupted)
+            _ => Err(ObjectCorrupted),
         }
     } else if branch_name.len() == 1 {
-        let commit_hash = read_lines_gen(PathBuf::from(".gnew/heads/".to_owned() + branch_name.get(0).unwrap()))?;
-        
+        let commit_hash = read_lines_gen(PathBuf::from(
+            ".gnew/heads/".to_owned() + branch_name.get(0).unwrap(),
+        ))?;
+
         match Hash::from_str(&commit_hash.get(0).unwrap()) {
             Ok(h) => Ok((h, false)),
-            _ => Err(ObjectCorrupted)
+            _ => Err(ObjectCorrupted),
         }
     } else {
         Err(ObjectCorrupted)
@@ -181,7 +185,7 @@ pub fn read_heads() -> Result<Vec<(String, Hash)>> {
 
         match Hash::from_str(&lines.get(0).unwrap()) {
             Ok(h) => heads.push((branch_name.last().unwrap().to_string(), h)),
-            _ => return Err(ObjectCorrupted)
+            _ => return Err(ObjectCorrupted),
         }
     }
 
@@ -193,7 +197,10 @@ pub fn change_curr_head(branch_name: String) -> Result<()> {
 }
 
 pub fn write_head(branch_name: String, hash: Hash) -> Result<()> {
-    write_lines_gen(PathBuf::from(".gnew/".to_owned() + &branch_name), &vec![hash.to_string()])
+    write_lines_gen(
+        PathBuf::from(".gnew/".to_owned() + &branch_name),
+        &vec![hash.to_string()],
+    )
 }
 
 #[cfg(test)]
