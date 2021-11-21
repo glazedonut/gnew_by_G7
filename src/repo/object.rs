@@ -12,9 +12,10 @@ pub struct Hash(sha1::Digest);
 
 #[derive(Debug)]
 pub struct Repository {
-    current_head: Option<Commit>,
-    heads: Vec<Commit>,
+    current_head: Option<Hash>,
+    heads: Vec<(String, Hash)>,
     pub tracklist: Vec<String>,
+    detached: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -90,8 +91,9 @@ impl Repository {
     pub fn new() -> Repository {
         Repository {
             current_head: None,
-            heads: Vec::<Commit>::new(),
+            heads: Vec::<(String, Hash)>::new(),
             tracklist: Vec::<String>::new(),
+            detached: false
         }
     }
 
@@ -106,11 +108,17 @@ impl Repository {
 
     /* TODO: read head, heads from disc */
     pub fn from_disc() -> Result<Repository> {
+        let head = transport::read_curr_head()?;
         Ok(Repository {
-            current_head: None,
-            heads: Vec::<Commit>::new(),
+            current_head: Some(head.0),
+            heads: transport::read_heads()?,
             tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
+            detached: head.1
         })
+    }
+
+    pub fn heads(&self) -> &Vec<(String, Hash)> {
+        &self.heads
     }
 
     /// Checks if a file is tracked.

@@ -9,6 +9,18 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
+// TODO: change return to vec of strings for printing. For now, we just print here
+pub fn heads() -> Result<()> {
+    let r = Repository::from_disc()?;
+    let heads = r.heads();
+
+    for h in heads {
+        println!("{:?}", h);
+    }
+
+    Ok(())
+}
+
 /* adds the specfied files to the tracklist on disc */
 pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     /* check that all the specified files exist */

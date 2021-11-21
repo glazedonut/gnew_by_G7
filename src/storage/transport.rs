@@ -7,6 +7,7 @@ use std::fs;
 use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::result;
+use std::str::FromStr;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -15,7 +16,7 @@ pub enum Error {
     ObjectNotFound,
     ObjectCorrupted,
     FileDoesNotExist,
-    IoError(io::Error),
+    IoError(io::Error)
 }
 
 impl error::Error for Error {}
@@ -148,6 +149,51 @@ pub fn read_tracklist() -> Result<Vec<String>> {
 pub fn write_tracklist(lines: &Vec<String>) -> Result<()> {
     let path = PathBuf::from(".gnew/tracklist");
     write_lines_gen(path, lines)
+}
+
+pub fn read_curr_head() -> Result<(Hash, bool)> {
+    let branch_name = read_lines_gen(PathBuf::from(".gnew/HEAD"))?;
+    if branch_name.len() == 2 {
+        match Hash::from_str(&branch_name.get(1).unwrap()) {
+            Ok(h) => Ok((h, true)),
+            _ => Err(ObjectCorrupted)
+        }
+    } else if branch_name.len() == 1 {
+        let commit_hash = read_lines_gen(PathBuf::from(".gnew/heads/".to_owned() + branch_name.get(0).unwrap()))?;
+        
+        match Hash::from_str(&commit_hash.get(0).unwrap()) {
+            Ok(h) => Ok((h, false)),
+            _ => Err(ObjectCorrupted)
+        }
+    } else {
+        Err(ObjectCorrupted)
+    }
+}
+
+pub fn read_heads() -> Result<Vec<(String, Hash)>> {
+    let paths = fs::read_dir(".gnew/heads").unwrap();
+    let mut heads: Vec<(String, Hash)> = Vec::new();
+
+    for p in paths {
+        let path = p.as_ref().unwrap().path();
+        let lines = read_lines_gen(&path)?;
+        let branch_name = path.to_str().unwrap().split("/");
+
+        match Hash::from_str(&lines.get(0).unwrap()) {
+            Ok(h) => heads.push((branch_name.last().unwrap().to_string(), h)),
+            _ => return Err(ObjectCorrupted)
+        }
+    }
+
+    Ok(heads)
+}
+
+pub fn change_curr_head(branch_name: String) -> Result<()> {
+    write_lines_gen(PathBuf::from(".gnew/HEAD"), &vec![branch_name])
+}
+
+pub fn write_head(branch_name: String, hash: Hash) -> Result<()> {
+    write_lines_gen(PathBuf::from(".gnew/".to_owned() + &branch_name), &vec![hash.to_string()])
 }
 
 #[cfg(test)]

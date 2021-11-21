@@ -86,6 +86,11 @@ pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     command::add(paths)
 }
 
+pub fn heads() -> Result<()> {
+    command::heads()?;
+    Ok(())
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     println!("{}", transport::write_blob(path)?.hash());
     Ok(())
@@ -114,6 +119,7 @@ pub fn main() {
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
+        Gnew::Heads => heads(),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {
