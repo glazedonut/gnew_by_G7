@@ -186,7 +186,7 @@ impl Repository {
             Err(_) => {0}
         };
        let _date:DateTime<Utc>=Utc.timestamp(currtime as i64, 0);
-        let mut user:String=String::new();
+        let mut user:String="Temp user".to_string();
         let env_vars = env::vars();
         for(key, value) in env_vars.into_iter() {
             if key=="USER".to_string() {
