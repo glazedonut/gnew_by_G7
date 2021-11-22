@@ -1,11 +1,15 @@
-use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result};
-use chrono::{DateTime, Utc};
+use crate::storage::transport::{self, read_lines_gen, write_empty_repo, Result, write_commit};
+
+use chrono::{DateTime, Utc, TimeZone};
 use sha1::{self, Sha1};
 use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::result;
+use std::env;
 use std::str;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Hash(sha1::Digest);
@@ -157,32 +161,53 @@ impl Repository {
         Ok(tree)
     }
 
-    /*
+
     pub fn commit(commitmsg: Option<String>) -> Result<()> {
-        let mut cmsg: Option<String> = Some("".to_string());
-        match commitmsg {
-            Some(ref c) => cmsg = Some(c.to_string()),
-            None => cmsg = Some("".to_string()),
+        let mut _cmsg: String = "".to_string();
+        _cmsg=match commitmsg {
+            Some(ref c) =>c.to_string(),
+            None => "".to_string(),
         };
-        let mut r = Repository::from_disc()?;
+        let r = Repository::from_disc()?;
 
 
-        let newparent:Option<Hash> =match r.current_head{
+        let _newparent:Option<Hash> =match r.current_head{
             None => {None}
-            Some(ref c) => {Some(c.hash)}
+            Some(ref c) => {Some(*c)}
         };
         let newtree:Result<Tree>=Repository::write_tree(&r);
-        let treehash= match newtree{
+        let _treehash= match newtree{
             Ok(c) => {c.hash}
             Err(..) => {Hash::new()}
         };
-        // let user = get_user_by_uid(get_current_uid()).unwrap();
-        // println!("Hello, {}!", user.name().to_string_lossy());
-        //let mut date:DateTime<Utc>=Utc.timestamp();
+        let time=SystemTime::now().duration_since(UNIX_EPOCH);
+        let currtime = match time{
+            Ok(c) => {c.as_millis()}
+            Err(_) => {0}
+        };
+       let _date:DateTime<Utc>=Utc.timestamp(currtime as i64, 0);
+        let mut user:String=String::new();
+        let env_vars = env::vars();
+        for(key, value) in env_vars.into_iter() {
+            if key=="USER".to_string() {
+                user=value;
+            }
+        }
+        let _newcommit=CommitInfo {
+            tree: _treehash,
+            parent: _newparent,
+            author: user,
+            time: _date,
+            msg: _cmsg,
+        };
+        let mut commit =Commit::new(_newcommit);
+        let _resultcommit= write_commit(&mut commit);
+
+
 
         Ok(())
     }
-    */
+
 }
 
 impl Commit {
