@@ -3,6 +3,7 @@ use crate::storage::transport::Error::*;
 use crate::storage::transport::{self, read_lines_gen, write_commit, write_empty_repo, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
+use std::collections::HashMap;
 use std::env;
 use std::ffi::OsStr;
 use std::fmt;
@@ -12,6 +13,7 @@ use std::result;
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
+use walkdir::{self, DirEntry, WalkDir};
 
 const MAX_TREE_DEPTH: usize = 1024;
 
@@ -24,6 +26,20 @@ pub struct Repository {
     heads: Vec<(String, Hash)>,
     pub tracklist: Vec<String>,
     detached: bool,
+}
+
+pub type Status = HashMap<PathBuf, FileStatus>;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FileStatus {
+    Untracked,
+    Unmodified,
+    Modified,
+    Added,
+    /// File was removed from tracking list.
+    Deleted,
+    /// File is tracked but missing from working tree.
+    Missing,
 }
 
 #[derive(Debug, PartialEq)]
@@ -142,6 +158,46 @@ impl Repository {
         self.tracklist.contains(&path.to_str().unwrap().to_owned())
     }
 
+    /// Returns the working tree status.
+    pub fn status(&self, tree: &Tree) -> Result<Status> {
+        let mut status = HashMap::new();
+        let mut head_files = HashMap::new();
+
+        for f in tree.files() {
+            let File { path, hash } = f?;
+            head_files.insert(path, hash);
+        }
+        for f in self.walk_worktree() {
+            let f = f?;
+            let path = f.path().strip_prefix(".").unwrap();
+
+            let fstatus = match (head_files.get(path), self.is_tracked(path)) {
+                (None, true) => FileStatus::Added,
+                (None, false) => FileStatus::Untracked,
+                (Some(hash), true) => {
+                    if hash_file(path)? == *hash {
+                        FileStatus::Unmodified
+                    } else {
+                        FileStatus::Modified
+                    }
+                }
+                (Some(_), false) => FileStatus::Deleted,
+            };
+            status.insert(path.to_owned(), fstatus);
+        }
+        for path in head_files.keys() {
+            if !status.contains_key(path) {
+                let fstatus = if self.is_tracked(path) {
+                    FileStatus::Missing
+                } else {
+                    FileStatus::Deleted
+                };
+                status.insert(path.to_owned(), fstatus);
+            }
+        }
+        Ok(status)
+    }
+
     /// Writes a tree object from the working directory.
     pub fn write_tree(&self) -> Result<Tree> {
         let mut tree = self.write_tree_rec(".".as_ref())?;
@@ -215,6 +271,17 @@ impl Repository {
 
         Ok(())
     }
+
+    fn walk_worktree(&self) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
+        WalkDir::new(".")
+            .min_depth(1)
+            .into_iter()
+            .filter_entry(|e| !e.path().starts_with("./.gnew"))
+            .filter(|e| match e {
+                Ok(e) => !e.file_type().is_dir(),
+                _ => true,
+            })
+    }
 }
 
 impl Commit {
@@ -238,11 +305,11 @@ impl Commit {
         self.hash.update(data)
     }
 
-    pub fn tree(&self) -> Hash {
+    pub fn tree_hash(&self) -> Hash {
         self.tree
     }
 
-    pub fn parent(&self) -> Option<Hash> {
+    pub fn parent_hash(&self) -> Option<Hash> {
         self.parent
     }
 
@@ -482,6 +549,13 @@ impl From<Blob> for Vec<u8> {
     fn from(blob: Blob) -> Vec<u8> {
         blob.content
     }
+}
+
+/// Computes the hash for a blob object with the contents of a file.
+fn hash_file<P: AsRef<Path>>(path: P) -> Result<Hash> {
+    let mut blob = Blob::new(fs::read(path)?);
+    serialize_blob(&mut blob);
+    Ok(blob.hash())
 }
 
 #[cfg(test)]

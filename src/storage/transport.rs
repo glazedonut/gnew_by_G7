@@ -40,6 +40,12 @@ impl From<io::Error> for Error {
     }
 }
 
+impl From<walkdir::Error> for Error {
+    fn from(err: walkdir::Error) -> Error {
+        IoError(err.into())
+    }
+}
+
 /// Creates and writes a blob object from the contents of a file.
 pub fn write_blob<P: AsRef<Path>>(path: P) -> Result<Blob> {
     let mut blob = Blob::new(fs::read(path)?);

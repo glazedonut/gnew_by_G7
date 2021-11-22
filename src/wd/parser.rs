@@ -29,7 +29,7 @@ pub enum Gnew {
         recursive: bool,
     },
     /// Show the repository status
-    Status,
+    Status { tree: Hash },
     /// List the heads
     Heads,
     /// Show changes between commits
@@ -86,6 +86,16 @@ pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     command::add(paths)
 }
 
+pub fn status(tree: Hash) -> Result<()> {
+    let r = Repository::from_disc()?;
+    let tree = transport::read_tree(tree)?;
+
+    for (path, status) in r.status(&tree)? {
+        println!("{}:\t{:?}", path.display(), status);
+    }
+    Ok(())
+}
+
 pub fn heads() -> Result<()> {
     command::heads()?;
     Ok(())
@@ -116,6 +126,7 @@ pub fn main() {
     match opt {
         Gnew::Init => init(),
         Gnew::Add { paths } => add(&paths),
+        Gnew::Status { tree } => status(tree),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
