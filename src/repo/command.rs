@@ -74,7 +74,6 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
 
 /* check that a direntry starts with a . */
 fn is_hidden(entry: &DirEntry) -> bool {
-    println!("{:?}", entry.path().to_str());
     entry
         .file_name()
         .to_str()

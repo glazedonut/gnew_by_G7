@@ -40,7 +40,7 @@ pub enum Gnew {
     /// Output a file at a commit
     Cat { commit: Hash, path: PathBuf },
     /// Check out a commit
-    Checkout { commit: Hash },
+    Checkout { commit: String },
     /// Commit changes to the repository
     Commit { message: String },
     /// Show the commit log
@@ -126,6 +126,11 @@ pub fn commit(message: String) -> Result<()> {
     Ok(())
 }
 
+pub fn checkout(commit: String) -> Result<()> {
+    Repository::checkout(commit)?;
+    Ok(())
+}
+
 pub fn main() {
     let opt = parse();
     match opt {
@@ -137,6 +142,7 @@ pub fn main() {
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
         Gnew::Heads => heads(),
         Gnew::Commit { message } => commit(message),
+        Gnew::Checkout { commit } => checkout(commit),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

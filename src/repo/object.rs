@@ -14,6 +14,7 @@ use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
+use std::str::FromStr;
 
 const MAX_TREE_DEPTH: usize = 1024;
 
@@ -23,7 +24,7 @@ pub struct Hash(sha1::Digest);
 #[derive(Debug)]
 pub struct Repository {
     current_head: Option<Hash>,
-    heads: Vec<(String, Option<Hash>)>,
+    heads: HashMap<String, Option<Hash>>,
     pub tracklist: Vec<String>,
     detached: bool,
 }
@@ -123,7 +124,7 @@ impl Repository {
     pub fn new() -> Repository {
         Repository {
             current_head: None,
-            heads: Vec::<(String, Option<Hash>)>::new(),
+            heads: HashMap::<String, Option<Hash>>::new(),
             tracklist: Vec::<String>::new(),
             detached: false,
         }
@@ -149,7 +150,7 @@ impl Repository {
         })
     }
 
-    pub fn heads(&self) -> &Vec<(String, Option<Hash>)> {
+    pub fn heads(&self) -> &HashMap<String, Option<Hash>> {
         &self.heads
     }
 
@@ -284,6 +285,28 @@ impl Repository {
                 Ok(e) => !e.file_type().is_dir(),
                 _ => true,
             })
+    }
+
+    pub fn checkout(init: String) -> Result<()> {
+        let r = Repository::from_disc()?;
+
+        let hash = match Hash::from_str(&init) {
+            Ok(h) => h,
+            _     => { match r.heads.get(&init).unwrap() {
+                            Some(h) => *h,
+                            /* branch has no commits - do nothing */
+                            None => return Ok(())
+                        }
+                    }
+        };
+
+        /* read commit by hash, get tree hash, read tree by hash */
+        let tree = transport::read_tree(transport::read_commit(hash)?.tree_hash())?;
+
+        let status = r.status(&tree);
+        let files = tree.files();
+
+        Ok(())
     }
 }
 

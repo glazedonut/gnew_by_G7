@@ -8,6 +8,7 @@ use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str::FromStr;
+use std::collections::HashMap;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -17,6 +18,7 @@ pub enum Error {
     ObjectMissing,
     ObjectCorrupted,
     FileNotFound,
+    CheckoutFailed,
     IoError(io::Error),
 }
 
@@ -29,6 +31,7 @@ impl fmt::Display for Error {
             ObjectMissing => write!(f, "missing object"),
             ObjectCorrupted => write!(f, "corrupted object"),
             FileNotFound => write!(f, "file not found"),
+            CheckoutFailed => write!(f, "checkout failed: commit or remove changes"),
             IoError(error) => write!(f, "IO error: {}", error),
         }
     }
@@ -186,9 +189,9 @@ pub fn read_curr_head() -> Result<(Option<Hash>, bool)> {
     }
 }
 
-pub fn read_heads() -> Result<Vec<(String, Option<Hash>)>> {
+pub fn read_heads() -> Result<HashMap<String, Option<Hash>>> {
     let paths = fs::read_dir(".gnew/heads").unwrap();
-    let mut heads: Vec<(String, Option<Hash>)> = Vec::new();
+    let mut heads: HashMap<String, Option<Hash>> = HashMap::new();
 
     for p in paths {
         let path = p.as_ref().unwrap().path();
@@ -196,12 +199,12 @@ pub fn read_heads() -> Result<Vec<(String, Option<Hash>)>> {
         let branch_name = path.to_str().unwrap().split("/");
 
         if lines.len() == 0 {
-            heads.push((branch_name.last().unwrap().to_string(), None))
+            heads.insert(branch_name.last().unwrap().to_string(), None);
         } else {
             match Hash::from_str(&lines.get(0).unwrap()) {
-            Ok(h) => heads.push((branch_name.last().unwrap().to_string(), Some(h))),
-            _ => return Err(ObjectCorrupted),
-        }
+                Ok(h) => heads.insert(branch_name.last().unwrap().to_string(), Some(h)),
+                _ => return Err(ObjectCorrupted),
+            };
         }
     }
 
