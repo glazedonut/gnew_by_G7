@@ -121,6 +121,11 @@ pub fn cat_object(type_: &str, object: Hash) -> Result<()> {
     Ok(())
 }
 
+pub fn commit(message: String) -> Result<()> {
+    Repository::commit(Some(message))?;
+    Ok(())
+}
+
 pub fn main() {
     let opt = parse();
     match opt {
@@ -131,6 +136,7 @@ pub fn main() {
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
         Gnew::Heads => heads(),
+        Gnew::Commit { message } => commit(message),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

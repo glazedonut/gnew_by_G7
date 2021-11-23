@@ -23,7 +23,7 @@ pub struct Hash(sha1::Digest);
 #[derive(Debug)]
 pub struct Repository {
     current_head: Option<Hash>,
-    heads: Vec<(String, Hash)>,
+    heads: Vec<(String, Option<Hash>)>,
     pub tracklist: Vec<String>,
     detached: bool,
 }
@@ -123,7 +123,7 @@ impl Repository {
     pub fn new() -> Repository {
         Repository {
             current_head: None,
-            heads: Vec::<(String, Hash)>::new(),
+            heads: Vec::<(String, Option<Hash>)>::new(),
             tracklist: Vec::<String>::new(),
             detached: false,
         }
@@ -142,14 +142,14 @@ impl Repository {
     pub fn from_disc() -> Result<Repository> {
         let head = transport::read_curr_head()?;
         Ok(Repository {
-            current_head: Some(head.0),
+            current_head: head.0,
             heads: transport::read_heads()?,
             tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
             detached: head.1,
         })
     }
 
-    pub fn heads(&self) -> &Vec<(String, Hash)> {
+    pub fn heads(&self) -> &Vec<(String, Option<Hash>)> {
         &self.heads
     }
 
@@ -268,6 +268,9 @@ impl Repository {
         };
         let mut commit = Commit::new(_newcommit);
         let _resultcommit = write_commit(&mut commit);
+
+        let branch_name = transport::current_branch()?;
+        transport::update_head(branch_name, commit.hash())?;
 
         Ok(())
     }

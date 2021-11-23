@@ -78,8 +78,10 @@ fn write_object(hash: Hash, obj: &[u8]) -> Result<()> {
 pub fn write_empty_repo() -> Result<()> {
     fs::create_dir_all(".gnew/objects")?;
     fs::create_dir(".gnew/heads")?;
-    fs::write(".gnew/HEAD", "")?;
+    fs::write(".gnew/heads/main", "")?;
+    fs::write(".gnew/HEAD", "main")?;
     fs::write(".gnew/tracklist", "")?;
+    
     Ok(())
 }
 
@@ -159,11 +161,11 @@ pub fn write_tracklist(lines: &Vec<String>) -> Result<()> {
     write_lines_gen(path, lines)
 }
 
-pub fn read_curr_head() -> Result<(Hash, bool)> {
+pub fn read_curr_head() -> Result<(Option<Hash>, bool)> {
     let branch_name = read_lines_gen(PathBuf::from(".gnew/HEAD"))?;
     if branch_name.len() == 2 {
         match Hash::from_str(&branch_name.get(1).unwrap()) {
-            Ok(h) => Ok((h, true)),
+            Ok(h) => Ok((Some(h), true)),
             _ => Err(ObjectCorrupted),
         }
     } else if branch_name.len() == 1 {
@@ -171,8 +173,12 @@ pub fn read_curr_head() -> Result<(Hash, bool)> {
             ".gnew/heads/".to_owned() + branch_name.get(0).unwrap(),
         ))?;
 
+        if commit_hash.len() == 0 {
+            return Ok((None, false))
+        }
+
         match Hash::from_str(&commit_hash.get(0).unwrap()) {
-            Ok(h) => Ok((h, false)),
+            Ok(h) => Ok((Some(h), false)),
             _ => Err(ObjectCorrupted),
         }
     } else {
@@ -180,25 +186,29 @@ pub fn read_curr_head() -> Result<(Hash, bool)> {
     }
 }
 
-pub fn read_heads() -> Result<Vec<(String, Hash)>> {
+pub fn read_heads() -> Result<Vec<(String, Option<Hash>)>> {
     let paths = fs::read_dir(".gnew/heads").unwrap();
-    let mut heads: Vec<(String, Hash)> = Vec::new();
+    let mut heads: Vec<(String, Option<Hash>)> = Vec::new();
 
     for p in paths {
         let path = p.as_ref().unwrap().path();
         let lines = read_lines_gen(&path)?;
         let branch_name = path.to_str().unwrap().split("/");
 
-        match Hash::from_str(&lines.get(0).unwrap()) {
-            Ok(h) => heads.push((branch_name.last().unwrap().to_string(), h)),
+        if lines.len() == 0 {
+            heads.push((branch_name.last().unwrap().to_string(), None))
+        } else {
+            match Hash::from_str(&lines.get(0).unwrap()) {
+            Ok(h) => heads.push((branch_name.last().unwrap().to_string(), Some(h))),
             _ => return Err(ObjectCorrupted),
+        }
         }
     }
 
     Ok(heads)
 }
 
-pub fn change_curr_head(branch_name: String) -> Result<()> {
+pub fn change_branch(branch_name: String) -> Result<()> {
     write_lines_gen(PathBuf::from(".gnew/HEAD"), &vec![branch_name])
 }
 
@@ -207,6 +217,16 @@ pub fn write_head(branch_name: String, hash: Hash) -> Result<()> {
         PathBuf::from(".gnew/".to_owned() + &branch_name),
         &vec![hash.to_string()],
     )
+}
+
+/* assumes that HEAD is not detached */
+pub fn current_branch() -> Result<String> {
+    let mut branch_name = read_lines_gen(PathBuf::from(".gnew/HEAD"))?;
+    Ok(branch_name.swap_remove(0))
+}
+
+pub fn update_head(head: String, hash: Hash) -> Result<()> {
+    write_lines_gen(PathBuf::from(".gnew/heads/".to_owned() + &head), &vec![hash.to_string()])
 }
 
 #[cfg(test)]
