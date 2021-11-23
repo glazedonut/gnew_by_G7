@@ -96,11 +96,15 @@ pub fn deserialize_commit(obj: &[u8]) -> Option<Commit> {
 fn deserialize_commit_data(obj: &[u8]) -> Option<Commit> {
     let mut it = obj.split(|&b| b == b'\n');
     let tree = parse_from_utf8(it.next()?.strip_prefix(b"tree ")?)?;
-    let parent = match it.next()?.strip_prefix(b"parent ") {
+    let mut next = it.next()?;
+    let parent = match next.strip_prefix(b"parent ") {
         None => None,
-        Some(b) => Some(parse_from_utf8(b)?),
+        Some(b) => {
+            next = it.next()?;
+            Some(parse_from_utf8(b)?)
+        }
     };
-    let author = parse_string(it.next()?.strip_prefix(b"author ")?)?;
+    let author = parse_string(next.strip_prefix(b"author ")?)?;
     let time = parse_from_utf8(it.next()?.strip_prefix(b"time ")?)?;
     let time = Utc.timestamp_millis(time);
     it.next()?;
@@ -168,6 +172,23 @@ mod tests {
         let mut c1 = Commit::new(CommitInfo {
             tree: Hash::new(),
             parent: Some(Hash::new()),
+            author: "paul".to_owned(),
+            time: Utc.timestamp_millis(1637385703000),
+            msg: "write some code".to_owned(),
+        });
+
+        let obj = serialize_commit(&mut c1);
+        assert_eq!(obj, format!("commit\0{}", c1).into_bytes());
+
+        let c2 = deserialize_commit(&obj).unwrap();
+        assert_eq!(c1, c2);
+    }
+
+    #[test]
+    fn serde_commit_no_parent() {
+        let mut c1 = Commit::new(CommitInfo {
+            tree: Hash::new(),
+            parent: None,
             author: "paul".to_owned(),
             time: Utc.timestamp_millis(1637385703000),
             msg: "write some code".to_owned(),
