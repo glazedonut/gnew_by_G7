@@ -1,6 +1,7 @@
 use self::Error::*;
 use super::serialize::*;
 use crate::repo::object::{Blob, Commit, Hash, Tree};
+use std::collections::HashMap;
 use std::error;
 use std::fmt;
 use std::fs;
@@ -8,7 +9,6 @@ use std::io::{self, BufRead, BufReader, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str::FromStr;
-use std::collections::HashMap;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -19,6 +19,7 @@ pub enum Error {
     ObjectCorrupted,
     FileNotFound,
     CheckoutFailed,
+    DetachedHead,
     IoError(io::Error),
 }
 
@@ -32,6 +33,10 @@ impl fmt::Display for Error {
             ObjectCorrupted => write!(f, "corrupted object"),
             FileNotFound => write!(f, "file not found"),
             CheckoutFailed => write!(f, "checkout failed: commit or remove changes"),
+            DetachedHead => write!(
+                f,
+                "HEAD is in detached mode, run *gnew checkout new_branch_name* first"
+            ),
             IoError(error) => write!(f, "IO error: {}", error),
         }
     }
@@ -84,7 +89,7 @@ pub fn write_empty_repo() -> Result<()> {
     fs::write(".gnew/heads/main", "")?;
     fs::write(".gnew/HEAD", "main")?;
     fs::write(".gnew/tracklist", "")?;
-    
+
     Ok(())
 }
 
@@ -177,7 +182,7 @@ pub fn read_curr_head() -> Result<(Option<Hash>, bool)> {
         ))?;
 
         if commit_hash.len() == 0 {
-            return Ok((None, false))
+            return Ok((None, false));
         }
 
         match Hash::from_str(&commit_hash.get(0).unwrap()) {
@@ -211,15 +216,12 @@ pub fn read_heads() -> Result<HashMap<String, Option<Hash>>> {
     Ok(heads)
 }
 
-pub fn change_branch(branch_name: String) -> Result<()> {
-    write_lines_gen(PathBuf::from(".gnew/HEAD"), &vec![branch_name])
-}
-
-pub fn write_head(branch_name: String, hash: Hash) -> Result<()> {
-    write_lines_gen(
-        PathBuf::from(".gnew/".to_owned() + &branch_name),
-        &vec![hash.to_string()],
-    )
+pub fn change_branch(to: String, detach: bool) -> Result<()> {
+    let mut lines = vec![to];
+    if detach {
+        lines.insert(0, "DETACHED".to_string())
+    }
+    write_lines_gen(PathBuf::from(".gnew/HEAD"), &lines)
 }
 
 /* assumes that HEAD is not detached */
@@ -229,7 +231,10 @@ pub fn current_branch() -> Result<String> {
 }
 
 pub fn update_head(head: String, hash: Hash) -> Result<()> {
-    write_lines_gen(PathBuf::from(".gnew/heads/".to_owned() + &head), &vec![hash.to_string()])
+    write_lines_gen(
+        PathBuf::from(".gnew/heads/".to_owned() + &head),
+        &vec![hash.to_string()],
+    )
 }
 
 #[cfg(test)]

@@ -40,7 +40,13 @@ pub enum Gnew {
     /// Output a file at a commit
     Cat { commit: Hash, path: PathBuf },
     /// Check out a commit
-    Checkout { commit: String },
+    Checkout {
+        #[structopt(required = true)]
+        commit: String,
+
+        #[structopt(short)]
+        force: bool,
+    },
     /// Commit changes to the repository
     Commit { message: String },
     /// Show the commit log
@@ -126,8 +132,9 @@ pub fn commit(message: String) -> Result<()> {
     Ok(())
 }
 
-pub fn checkout(commit: String) -> Result<()> {
-    Repository::checkout(commit)?;
+pub fn checkout(commit: String, force: bool) -> Result<()> {
+    Repository::checkout(&commit, force)?;
+    println!("Switched to {:?}", commit);
     Ok(())
 }
 
@@ -142,7 +149,7 @@ pub fn main() {
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
         Gnew::Heads => heads(),
         Gnew::Commit { message } => commit(message),
-        Gnew::Checkout { commit } => checkout(commit),
+        Gnew::Checkout { commit, force } => checkout(commit, force),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

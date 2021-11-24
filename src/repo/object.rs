@@ -11,10 +11,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str;
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
-use std::str::FromStr;
 
 const MAX_TREE_DEPTH: usize = 1024;
 
@@ -238,6 +238,10 @@ impl Repository {
         };
         let r = Repository::from_disc()?;
 
+        if r.detached {
+            return Err(DetachedHead);
+        }
+
         let _newparent: Option<Hash> = match r.current_head {
             None => None,
             Some(ref c) => Some(*c),
@@ -247,12 +251,6 @@ impl Repository {
             Ok(c) => c.hash,
             Err(..) => Hash::new(),
         };
-        let time = SystemTime::now().duration_since(UNIX_EPOCH);
-        let currtime = match time {
-            Ok(c) => c.as_millis(),
-            Err(_) => 0,
-        };
-        let _date: DateTime<Utc> = Utc.timestamp(currtime as i64, 0);
         let mut user: String = "Temp user".to_string();
         let env_vars = env::vars();
         for (key, value) in env_vars.into_iter() {
@@ -260,6 +258,12 @@ impl Repository {
                 user = value;
             }
         }
+        let time = SystemTime::now().duration_since(UNIX_EPOCH);
+        let currtime = match time {
+            Ok(c) => c.as_millis(),
+            Err(_) => 0,
+        };
+        let _date: DateTime<Utc> = Utc.timestamp(currtime as i64, 0);
         let _newcommit = CommitInfo {
             tree: _treehash,
             parent: _newparent,
@@ -287,26 +291,119 @@ impl Repository {
             })
     }
 
-    pub fn checkout(init: String) -> Result<()> {
+    pub fn checkout(init: &String, force: bool) -> Result<()> {
         let r = Repository::from_disc()?;
 
+        /* init can either be a hash or a branch name */
+        let mut should_detach_head = false;
         let hash = match Hash::from_str(&init) {
-            Ok(h) => h,
-            _     => { match r.heads.get(&init).unwrap() {
-                            Some(h) => *h,
-                            /* branch has no commits - do nothing */
-                            None => return Ok(())
-                        }
+            /* string was a hash */
+            Ok(h) => {
+                should_detach_head = true;
+                h
+            }
+            /* string was a branch name - get from dir */
+            _ => {
+                match r.heads.get(init) {
+                    Some(head) => match head {
+                        Some(h) => *h,
+                        /* branch has no commits - do nothing */
+                        None => return Ok(()),
+                    },
+                    None => {
+                        r.create_branch(init.clone())?;
+                        r.current_head.unwrap()
                     }
+                }
+            }
         };
+
+        /* first, we need to make sure that we are safe to switch to another commit,
+         * which means there all the files in the dir are either Unmodified or Missing
+         */
+
+        /* if checkout is forced, skip the safe switch check */
+        if !force {
+            /* read commit by hash, get tree hash, read tree by hash */
+            let curr_tree =
+                transport::read_tree(transport::read_commit(r.current_head.unwrap())?.tree_hash())?;
+            let curr_status = r.status(&curr_tree)?;
+
+            for f in curr_status {
+                match f.1 {
+                    FileStatus::Untracked
+                    | FileStatus::Added
+                    | FileStatus::Deleted
+                    | FileStatus::Modified => return Err(CheckoutFailed),
+                    FileStatus::Unmodified | FileStatus::Missing => continue,
+                };
+            }
+        }
+
+        /* next, we can do the actual checkout */
 
         /* read commit by hash, get tree hash, read tree by hash */
         let tree = transport::read_tree(transport::read_commit(hash)?.tree_hash())?;
 
-        let status = r.status(&tree);
-        let files = tree.files();
+        let status = r.status(&tree)?;
+
+        for f in status {
+            match f.1 {
+                /* file was added, remove */
+                FileStatus::Added => fs::remove_file(f.0)?,
+                /* file was deleted, copy over */
+                FileStatus::Deleted => {
+                    Repository::copy_objects_to_files(tree.files(), f.0)?;
+                }
+                /* file was modified, remove and copy over
+                 * ideally, should do something fancy to modify existing file instead of copying, but oh well
+                 */
+                FileStatus::Modified => {
+                    fs::remove_file(&f.0)?;
+                    Repository::copy_objects_to_files(tree.files(), f.0)?;
+                }
+                /* file is the same, do nothing */
+                FileStatus::Unmodified => continue,
+                /* if checkout was forced, delete the untracked/missing file */
+                FileStatus::Untracked | FileStatus::Missing => {
+                    if force {
+                        fs::remove_file(f.0)?
+                    } else {
+                        return Err(CheckoutFailed);
+                    }
+                }
+            };
+        }
+
+        /* update tracklist on disc */
+        let mut new_tracklist = Vec::new();
+        for file in tree.files() {
+            let File { path, .. } = file?;
+            new_tracklist.push(path.to_str().unwrap().to_owned())
+        }
+        transport::write_tracklist(&new_tracklist)?;
+
+        /* update HEAD */
+        transport::change_branch(init.clone(), should_detach_head)?;
 
         Ok(())
+    }
+
+    /* TODO: enhance with creation of directories */
+    fn copy_objects_to_files(files: FileIter, f: PathBuf) -> Result<()> {
+        for file in files {
+            let File { path, hash } = file?;
+            if path == f {
+                let blob: Blob = transport::read_blob(hash).map(|blob| blob.into())?;
+                fs::write(path, blob.content)?;
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn create_branch(&self, name: String) -> Result<()> {
+        transport::update_head(name, self.current_head.unwrap())
     }
 }
 
@@ -503,6 +600,14 @@ impl File {
 
     pub fn contents(&self) -> Result<Vec<u8>> {
         transport::read_blob(self.hash).map(|blob| blob.into())
+    }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    pub fn hash(&self) -> Hash {
+        self.hash
     }
 }
 
