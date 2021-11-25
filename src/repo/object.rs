@@ -405,6 +405,28 @@ impl Repository {
     fn create_branch(&self, name: String) -> Result<()> {
         transport::update_head(name, self.current_head.unwrap())
     }
+
+    pub fn log(amount: u32) -> Result<Vec<Commit>> {
+        let r = Repository::from_disc()?;
+        if r.current_head.is_none() {
+            return Ok(Vec::new());
+        }
+
+        let mut count = 0;
+        let mut commit_iter = transport::read_commit(r.current_head.unwrap())?.into_iter();
+        let mut commit_vec: Vec<Commit> = Vec::new();
+
+        while let Some(commit) = commit_iter.next() {
+            if amount != 0 && count == amount {
+                break;
+            }
+
+            commit_vec.push(commit?);
+            count += 1;
+        }
+
+        Ok(commit_vec)
+    }
 }
 
 impl Commit {
@@ -447,6 +469,10 @@ impl Commit {
     pub fn msg(&self) -> &str {
         &self.msg
     }
+
+    pub fn into_iter(self) -> CommitIter {
+        CommitIter { commit: Some(self) }
+    }
 }
 
 impl fmt::Display for Commit {
@@ -459,6 +485,7 @@ impl fmt::Display for Commit {
     ///
     /// <commit message>
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "commit {}\n", self.hash)?;
         write!(f, "tree {}\n", self.tree)?;
 
         if let Some(parent) = self.parent {
@@ -466,6 +493,34 @@ impl fmt::Display for Commit {
         }
         write!(f, "author {}\n", self.author)?;
         write!(f, "time {}\n\n{}\n", self.time.timestamp_millis(), self.msg)
+    }
+}
+
+#[derive(Debug)]
+pub struct CommitIter {
+    commit: Option<Commit>,
+}
+
+impl Iterator for CommitIter {
+    type Item = Result<Commit>;
+
+    fn next(&mut self) -> Option<Result<Commit>> {
+        match self.commit.take() {
+            Some(out_commit) => match out_commit.parent_hash() {
+                Some(h) => {
+                    match transport::read_commit(h) {
+                        Ok(parent_commit) => self.commit = Some(parent_commit),
+                        Err(err) => return Some(Err(err)),
+                    };
+                    return Some(Ok(out_commit));
+                }
+                None => {
+                    self.commit = None;
+                    return Some(Ok(out_commit));
+                }
+            },
+            None => return None,
+        }
     }
 }
 

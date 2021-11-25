@@ -44,13 +44,16 @@ pub enum Gnew {
         #[structopt(required = true)]
         commit: String,
 
-        #[structopt(short)]
+        #[structopt(short, long)]
         force: bool,
     },
     /// Commit changes to the repository
     Commit { message: String },
     /// Show the commit log
-    Log,
+    Log {
+        #[structopt(default_value = "0")]
+        amount: u32,
+    },
     /// Merge two commits
     Merge { commit: Hash },
     /// Pull changes from another repository
@@ -138,6 +141,14 @@ pub fn checkout(commit: String, force: bool) -> Result<()> {
     Ok(())
 }
 
+pub fn log(amount: u32) -> Result<()> {
+    let log = Repository::log(amount)?;
+    for l in log {
+        println!("{}\n", l);
+    }
+    Ok(())
+}
+
 pub fn main() {
     let opt = parse();
     match opt {
@@ -150,6 +161,7 @@ pub fn main() {
         Gnew::Heads => heads(),
         Gnew::Commit { message } => commit(message),
         Gnew::Checkout { commit, force } => checkout(commit, force),
+        Gnew::Log { amount } => log(amount),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {
