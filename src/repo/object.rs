@@ -139,7 +139,6 @@ impl Repository {
         Ok(r)
     }
 
-    /* TODO: read head, heads from disc */
     pub fn from_disc() -> Result<Repository> {
         let head = transport::read_curr_head()?;
         Ok(Repository {
@@ -350,7 +349,9 @@ impl Repository {
         for f in status {
             match f.1 {
                 /* file was added, remove */
-                FileStatus::Added => fs::remove_file(f.0)?,
+                FileStatus::Added => {
+                    fs::remove_file(f.0)?;
+                }
                 /* file was deleted, copy over */
                 FileStatus::Deleted => {
                     Repository::copy_objects_to_files(tree.files(), f.0)?;
@@ -389,11 +390,11 @@ impl Repository {
         Ok(())
     }
 
-    /* TODO: enhance with creation of directories */
     fn copy_objects_to_files(files: FileIter, f: PathBuf) -> Result<()> {
         for file in files {
             let File { path, hash } = file?;
             if path == f {
+                fs::create_dir_all(path.parent().unwrap())?;
                 let blob: Blob = transport::read_blob(hash).map(|blob| blob.into())?;
                 fs::write(path, blob.content)?;
                 break;
@@ -485,7 +486,6 @@ impl fmt::Display for Commit {
     ///
     /// <commit message>
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "commit {}\n", self.hash)?;
         write!(f, "tree {}\n", self.tree)?;
 
         if let Some(parent) = self.parent {

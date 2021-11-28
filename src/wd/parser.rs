@@ -144,7 +144,7 @@ pub fn checkout(commit: String, force: bool) -> Result<()> {
 pub fn log(amount: u32) -> Result<()> {
     let log = Repository::log(amount)?;
     for l in log {
-        println!("{}\n", l);
+        println!("commit {}\n{}", l.hash(), l);
     }
     Ok(())
 }
