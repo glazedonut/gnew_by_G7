@@ -1,6 +1,6 @@
 use crate::repo::command;
-use crate::repo::object::{Hash, Reference, Repository};
-use crate::storage::transport::{self, Result};
+use crate::repo::object::{Hash, Reference, Repository, Tree, Commit};
+use crate::storage::transport::{self, Result, read_tree};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -111,6 +111,15 @@ pub fn status(tree: Hash) -> Result<()> {
 pub fn heads() -> Result<()> {
     command::heads()?;
     Ok(())
+}
+
+pub fn cat(c:Commit,p:&Path )->Result<()>{
+        let commithash=c.tree;
+        let committree= read_tree(commithash)?;
+        let _file=Tree::file(&committree,p)?;
+        let buff= _file.contents()?;
+        io::stdout().write_all(&*buff)?;
+        Ok(())
 }
 
 pub fn checkout(o: CheckoutOptions) -> Result<()> {

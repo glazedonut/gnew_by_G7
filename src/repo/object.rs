@@ -4,12 +4,13 @@ use crate::storage::transport::{self, write_commit, write_empty_repo, Result, re
 use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
-use std::env;
+use std::{env};
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::result;
+
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
@@ -50,7 +51,7 @@ pub enum FileStatus {
 #[derive(Debug, PartialEq)]
 pub struct Commit {
     hash: Hash,
-    tree: Hash,
+    pub(crate) tree: Hash,
     parent: Option<Hash>,
     author: String,
     time: DateTime<Utc>,
@@ -317,19 +318,7 @@ impl Repository {
         }
     }
 
-    pub fn cat(c:Commit,p:&Path ){
-        let commithash=c.tree;
-        let committree= match read_tree(commithash){
-            Ok(c) => {c}
-            Err(_) => {Tree::new()}
-        };
-        let _filetree=Tree::file(&committree,p);
-        let _file= match _filetree{
-            Ok(c) => {c}
-            Err(_) => {File::new(Default::default(), Hash::new()) }
-        };
 
-    }
 
     fn walk_worktree(&self) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
         WalkDir::new(".")
@@ -680,6 +669,7 @@ impl fmt::Display for TreeEntryKind {
 }
 
 impl File {
+
     pub fn new(path: PathBuf, hash: Hash) -> File {
         File { path, hash }
     }
@@ -688,6 +678,7 @@ impl File {
         transport::read_blob(self.hash).map(|blob| blob.into())
     }
 }
+
 
 /// An iterator over the files in a tree.
 #[derive(Debug)]
