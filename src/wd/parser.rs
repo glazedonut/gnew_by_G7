@@ -1,5 +1,5 @@
 use crate::repo::command;
-use crate::repo::object::{Hash, Repository};
+use crate::repo::object::{Hash, Reference, Repository};
 use crate::storage::transport::{self, Result};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -7,7 +7,7 @@ use structopt::StructOpt;
 
 #[derive(Debug, StructOpt)]
 #[structopt(about, author)]
-pub enum Gnew {
+enum Gnew {
     /// Create an empty repository
     Init,
     /// Copy an existing repository
@@ -39,14 +39,8 @@ pub enum Gnew {
     },
     /// Output a file at a commit
     Cat { commit: Hash, path: PathBuf },
-    /// Check out a commit
-    Checkout {
-        #[structopt(required = true)]
-        commit: String,
-
-        #[structopt(short, long)]
-        force: bool,
-    },
+    /// Update the working directory
+    Checkout(CheckoutOptions),
     /// Commit changes to the repository
     Commit { message: String },
     /// Show the commit log
@@ -81,8 +75,17 @@ pub enum Gnew {
     },
 }
 
-pub fn parse() -> Gnew {
-    Gnew::from_args()
+#[derive(Debug, StructOpt)]
+pub struct CheckoutOptions {
+    /// The branch or commit to check out
+    branch: String,
+
+    /// Create and checkout a new branch
+    #[structopt(short = "b")]
+    create: bool,
+
+    #[structopt(short, long)]
+    force: bool,
 }
 
 pub fn init() -> Result<()> {
@@ -110,6 +113,38 @@ pub fn heads() -> Result<()> {
     Ok(())
 }
 
+pub fn checkout(o: CheckoutOptions) -> Result<()> {
+    let mut r = Repository::from_disc()?;
+
+    if o.create {
+        r.create_branch(&o.branch)?;
+        println!("Switched to new branch '{}'", o.branch);
+    } else if o.branch != "HEAD" {
+        let new_head = parse_reference(&o.branch);
+        r.checkout(new_head.clone(), o.force)?;
+        println!("Switched to {}", new_head);
+    }
+    Ok(())
+}
+
+fn parse_reference(s: &str) -> Reference {
+    s.parse()
+        .map_or_else(|_| Reference::Branch(s.to_owned()), Reference::Hash)
+}
+
+pub fn commit(message: String) -> Result<()> {
+    Repository::commit(Some(message))?;
+    Ok(())
+}
+
+pub fn log(amount: u32) -> Result<()> {
+    let log = Repository::log(amount)?;
+    for l in log {
+        println!("commit {}\n{}", l.hash(), l);
+    }
+    Ok(())
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     println!("{}", transport::write_blob(path)?.hash());
     Ok(())
@@ -130,38 +165,19 @@ pub fn cat_object(type_: &str, object: Hash) -> Result<()> {
     Ok(())
 }
 
-pub fn commit(message: String) -> Result<()> {
-    Repository::commit(Some(message))?;
-    Ok(())
-}
-
-pub fn checkout(commit: String, force: bool) -> Result<()> {
-    Repository::checkout(&commit, force)?;
-    println!("Switched to {:?}", commit);
-    Ok(())
-}
-
-pub fn log(amount: u32) -> Result<()> {
-    let log = Repository::log(amount)?;
-    for l in log {
-        println!("commit {}\n{}", l.hash(), l);
-    }
-    Ok(())
-}
-
 pub fn main() {
-    let opt = parse();
+    let opt = Gnew::from_args();
     match opt {
         Gnew::Init => init(),
         Gnew::Add { paths } => add(&paths),
         Gnew::Status { tree } => status(tree),
+        Gnew::Heads => heads(),
+        Gnew::Checkout(opt) => checkout(opt),
+        Gnew::Commit { message } => commit(message),
+        Gnew::Log { amount } => log(amount),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
-        Gnew::Heads => heads(),
-        Gnew::Commit { message } => commit(message),
-        Gnew::Checkout { commit, force } => checkout(commit, force),
-        Gnew::Log { amount } => log(amount),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

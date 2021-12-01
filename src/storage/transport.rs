@@ -1,26 +1,27 @@
 use self::Error::*;
 use super::serialize::*;
-use crate::repo::object::{Blob, Commit, Hash, Tree};
+use crate::repo::object::{Blob, Commit, Hash, Reference, Tree};
 use std::collections::HashMap;
 use std::error;
 use std::fmt;
-use std::fs;
-use std::io::{self, BufRead, BufReader, ErrorKind};
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::result;
-use std::str::FromStr;
+use walkdir::WalkDir;
 
 pub type Result<T> = result::Result<T, Error>;
 
 #[derive(Debug)]
 pub enum Error {
-    ObjectNotFound,
-    ObjectMissing,
-    ObjectCorrupted,
-    FileNotFound,
+    BranchExists,
     CheckoutFailed,
-    DetachedHead,
+    FileNotFound,
     IoError(io::Error),
+    ObjectCorrupted,
+    ObjectMissing,
+    ObjectNotFound,
+    ReferenceNotFound,
 }
 
 impl error::Error for Error {}
@@ -28,16 +29,14 @@ impl error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ObjectNotFound => write!(f, "object not found"),
-            ObjectMissing => write!(f, "missing object"),
-            ObjectCorrupted => write!(f, "corrupted object"),
-            FileNotFound => write!(f, "file not found"),
+            BranchExists => write!(f, "branch already exists"),
             CheckoutFailed => write!(f, "checkout failed: commit or remove changes"),
-            DetachedHead => write!(
-                f,
-                "HEAD is in detached mode, run *gnew checkout new_branch_name* first"
-            ),
+            FileNotFound => write!(f, "file not found"),
             IoError(error) => write!(f, "IO error: {}", error),
+            ObjectCorrupted => write!(f, "corrupted object"),
+            ObjectMissing => write!(f, "missing object"),
+            ObjectNotFound => write!(f, "object not found"),
+            ReferenceNotFound => write!(f, "reference not found"),
         }
     }
 }
@@ -86,10 +85,8 @@ fn write_object(hash: Hash, obj: &[u8]) -> Result<()> {
 pub fn write_empty_repo() -> Result<()> {
     fs::create_dir_all(".gnew/objects")?;
     fs::create_dir(".gnew/heads")?;
-    fs::write(".gnew/heads/main", "")?;
-    fs::write(".gnew/HEAD", "main")?;
+    fs::write(".gnew/HEAD", "ref: main\n")?;
     fs::write(".gnew/tracklist", "")?;
-
     Ok(())
 }
 
@@ -169,72 +166,49 @@ pub fn write_tracklist(lines: &Vec<String>) -> Result<()> {
     write_lines_gen(path, lines)
 }
 
-pub fn read_curr_head() -> Result<(Option<Hash>, bool)> {
-    let branch_name = read_lines_gen(PathBuf::from(".gnew/HEAD"))?;
-    if branch_name.len() == 2 {
-        match Hash::from_str(&branch_name.get(1).unwrap()) {
-            Ok(h) => Ok((Some(h), true)),
-            _ => Err(ObjectCorrupted),
-        }
-    } else if branch_name.len() == 1 {
-        let commit_hash = read_lines_gen(PathBuf::from(
-            ".gnew/heads/".to_owned() + branch_name.get(0).unwrap(),
-        ))?;
+pub fn write_head(r: &Reference) -> Result<()> {
+    let mut f = File::create(".gnew/HEAD")?;
+    match r {
+        Reference::Hash(h) => writeln!(f, "{}", h),
+        Reference::Branch(b) => writeln!(f, "ref: {}", b),
+    }?;
+    Ok(())
+}
 
-        if commit_hash.len() == 0 {
-            return Ok((None, false));
-        }
+pub fn read_head() -> Result<Reference> {
+    let head = fs::read_to_string(".gnew/HEAD")?;
+    let head = head.trim();
 
-        match Hash::from_str(&commit_hash.get(0).unwrap()) {
-            Ok(h) => Ok((Some(h), false)),
-            _ => Err(ObjectCorrupted),
+    Ok(match head.strip_prefix("ref: ") {
+        Some(b) => Reference::Branch(b.to_owned()),
+        None => Reference::Hash(head.parse().or(Err(ObjectCorrupted))?),
+    })
+}
+
+pub fn write_branch(name: &str, commit: Hash) -> Result<()> {
+    let mut f = File::create(Path::new(".gnew/heads").join(name))?;
+    writeln!(f, "{}", commit)?;
+    Ok(())
+}
+
+pub fn read_branches() -> Result<HashMap<String, Hash>> {
+    let mut branches = HashMap::new();
+
+    for f in WalkDir::new(".gnew/heads") {
+        let f = f?;
+        if !f.file_type().is_file() {
+            continue;
         }
-    } else {
-        Err(ObjectCorrupted)
+        let path = f.path();
+        let name = path.strip_prefix(".gnew/heads").unwrap().to_str().unwrap();
+        let hash = fs::read_to_string(path)?
+            .trim()
+            .parse()
+            .or(Err(ObjectCorrupted))?;
+
+        branches.insert(name.to_owned(), hash);
     }
-}
-
-pub fn read_heads() -> Result<HashMap<String, Option<Hash>>> {
-    let paths = fs::read_dir(".gnew/heads").unwrap();
-    let mut heads: HashMap<String, Option<Hash>> = HashMap::new();
-
-    for p in paths {
-        let path = p.as_ref().unwrap().path();
-        let lines = read_lines_gen(&path)?;
-        let branch_name = path.to_str().unwrap().split("/");
-
-        if lines.len() == 0 {
-            heads.insert(branch_name.last().unwrap().to_string(), None);
-        } else {
-            match Hash::from_str(&lines.get(0).unwrap()) {
-                Ok(h) => heads.insert(branch_name.last().unwrap().to_string(), Some(h)),
-                _ => return Err(ObjectCorrupted),
-            };
-        }
-    }
-
-    Ok(heads)
-}
-
-pub fn change_branch(to: String, detach: bool) -> Result<()> {
-    let mut lines = vec![to];
-    if detach {
-        lines.insert(0, "DETACHED".to_string())
-    }
-    write_lines_gen(PathBuf::from(".gnew/HEAD"), &lines)
-}
-
-/* assumes that HEAD is not detached */
-pub fn current_branch() -> Result<String> {
-    let mut branch_name = read_lines_gen(PathBuf::from(".gnew/HEAD"))?;
-    Ok(branch_name.swap_remove(0))
-}
-
-pub fn update_head(head: String, hash: Hash) -> Result<()> {
-    write_lines_gen(
-        PathBuf::from(".gnew/heads/".to_owned() + &head),
-        &vec![hash.to_string()],
-    )
+    Ok(branches)
 }
 
 #[cfg(test)]

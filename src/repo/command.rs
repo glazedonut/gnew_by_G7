@@ -12,7 +12,7 @@ pub fn init() -> Result<()> {
 // TODO: change return to vec of strings for printing. For now, we just print here
 pub fn heads() -> Result<()> {
     let r = Repository::from_disc()?;
-    let heads = r.heads();
+    let heads = r.branches();
 
     for h in heads {
         println!("{:?}", h);

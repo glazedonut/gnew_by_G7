@@ -1,6 +1,6 @@
 use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
-use crate::storage::transport::{self, read_lines_gen, write_commit, write_empty_repo, Result, read_tree};
+use crate::storage::transport::{self, write_commit, write_empty_repo, Result, read_tree};
 use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
@@ -11,7 +11,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str;
-use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
@@ -23,10 +22,15 @@ pub struct Hash(sha1::Digest);
 
 #[derive(Debug)]
 pub struct Repository {
-    current_head: Option<Hash>,
-    heads: HashMap<String, Option<Hash>>,
+    head: Reference,
+    branches: HashMap<String, Hash>,
     pub tracklist: Vec<String>,
-    detached: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Reference {
+    Hash(Hash),
+    Branch(String),
 }
 
 pub type Status = HashMap<PathBuf, FileStatus>;
@@ -123,10 +127,9 @@ impl str::FromStr for Hash {
 impl Repository {
     pub fn new() -> Repository {
         Repository {
-            current_head: None,
-            heads: HashMap::<String, Option<Hash>>::new(),
+            head: Reference::Branch("main".to_owned()),
+            branches: HashMap::new(),
             tracklist: Vec::<String>::new(),
-            detached: false,
         }
     }
 
@@ -140,17 +143,56 @@ impl Repository {
     }
 
     pub fn from_disc() -> Result<Repository> {
-        let head = transport::read_curr_head()?;
         Ok(Repository {
-            current_head: head.0,
-            heads: transport::read_heads()?,
-            tracklist: read_lines_gen(Path::new(".gnew/tracklist"))?,
-            detached: head.1,
+            head: transport::read_head()?,
+            branches: transport::read_branches()?,
+            tracklist: transport::read_tracklist()?,
         })
     }
 
-    pub fn heads(&self) -> &HashMap<String, Option<Hash>> {
-        &self.heads
+    pub fn head(&self) -> &Reference {
+        &self.head
+    }
+
+    pub fn head_hash(&self) -> Result<Hash> {
+        self.resolve_reference(&self.head)
+    }
+
+    fn resolve_reference(&self, r: &Reference) -> Result<Hash> {
+        match r {
+            Reference::Hash(hash) => Ok(*hash),
+            Reference::Branch(b) => self.branch(b),
+        }
+    }
+
+    fn set_head(&mut self, head: Reference) -> Result<()> {
+        transport::write_head(&head)?;
+        Ok(self.head = head)
+    }
+
+    pub fn branch(&self, name: &str) -> Result<Hash> {
+        self.branches.get(name).copied().ok_or(ReferenceNotFound)
+    }
+
+    pub fn branches(&self) -> &HashMap<String, Hash> {
+        &self.branches
+    }
+
+    fn set_branch(&mut self, name: &str, hash: Hash) -> Result<()> {
+        transport::write_branch(name, hash)?;
+        self.branches.insert(name.to_owned(), hash);
+        Ok(())
+    }
+
+    /// Updates HEAD to point to a new branch.
+    pub fn create_branch(&mut self, name: &str) -> Result<()> {
+        if self.branches.contains_key(name) {
+            return Err(BranchExists);
+        }
+        if let Ok(hash) = self.head_hash() {
+            self.set_branch(name, hash)?;
+        }
+        self.set_head(Reference::Branch(name.to_owned()))
     }
 
     /// Checks if a file is tracked.
@@ -235,16 +277,8 @@ impl Repository {
             Some(ref c) => c.to_string(),
             None => "".to_string(),
         };
-        let r = Repository::from_disc()?;
+        let mut r = Repository::from_disc()?;
 
-        if r.detached {
-            return Err(DetachedHead);
-        }
-
-        let _newparent: Option<Hash> = match r.current_head {
-            None => None,
-            Some(ref c) => Some(*c),
-        };
         let newtree: Result<Tree> = Repository::write_tree(&r);
         let _treehash = match newtree {
             Ok(c) => c.hash,
@@ -265,7 +299,7 @@ impl Repository {
         let _date: DateTime<Utc> = Utc.timestamp(currtime as i64, 0);
         let _newcommit = CommitInfo {
             tree: _treehash,
-            parent: _newparent,
+            parent: r.head_hash().ok(),
             author: user,
             time: _date,
             msg: _cmsg,
@@ -273,11 +307,16 @@ impl Repository {
         let mut commit = Commit::new(_newcommit);
         let _resultcommit = write_commit(&mut commit);
 
-        let branch_name = transport::current_branch()?;
-        transport::update_head(branch_name, commit.hash())?;
-
-        Ok(())
+        r.update_head(commit.hash())
     }
+
+    fn update_head(&mut self, commit: Hash) -> Result<()> {
+        match &self.head.clone() {
+            Reference::Hash(_) => self.set_head(Reference::Hash(commit)),
+            Reference::Branch(b) => self.set_branch(b, commit),
+        }
+    }
+
     pub fn cat(c:Commit,p:&Path ){
         let commithash=c.tree;
         let committree= match read_tree(commithash){
@@ -303,32 +342,8 @@ impl Repository {
             })
     }
 
-    pub fn checkout(init: &String, force: bool) -> Result<()> {
-        let r = Repository::from_disc()?;
-
-        /* init can either be a hash or a branch name */
-        let mut should_detach_head = false;
-        let hash = match Hash::from_str(&init) {
-            /* string was a hash */
-            Ok(h) => {
-                should_detach_head = true;
-                h
-            }
-            /* string was a branch name - get from dir */
-            _ => {
-                match r.heads.get(init) {
-                    Some(head) => match head {
-                        Some(h) => *h,
-                        /* branch has no commits - do nothing */
-                        None => return Ok(()),
-                    },
-                    None => {
-                        r.create_branch(init.clone())?;
-                        r.current_head.unwrap()
-                    }
-                }
-            }
-        };
+    pub fn checkout(&mut self, new_head: Reference, force: bool) -> Result<()> {
+        let hash = self.resolve_reference(&new_head)?;
 
         /* first, we need to make sure that we are safe to switch to another commit,
          * which means there all the files in the dir are either Unmodified or Missing
@@ -336,10 +351,9 @@ impl Repository {
 
         /* if checkout is forced, skip the safe switch check */
         if !force {
-            /* read commit by hash, get tree hash, read tree by hash */
-            let curr_tree =
-                transport::read_tree(transport::read_commit(r.current_head.unwrap())?.tree_hash())?;
-            let curr_status = r.status(&curr_tree)?;
+            /* read commit by hash, get tree */
+            let curr_tree = transport::read_commit(self.head_hash().unwrap())?.tree()?;
+            let curr_status = self.status(&curr_tree)?;
 
             for f in curr_status {
                 match f.1 {
@@ -354,10 +368,10 @@ impl Repository {
 
         /* next, we can do the actual checkout */
 
-        /* read commit by hash, get tree hash, read tree by hash */
-        let tree = transport::read_tree(transport::read_commit(hash)?.tree_hash())?;
+        /* read commit by hash, get tree */
+        let tree = transport::read_commit(hash)?.tree()?;
 
-        let status = r.status(&tree)?;
+        let status = self.status(&tree)?;
 
         for f in status {
             match f.1 {
@@ -398,9 +412,7 @@ impl Repository {
         transport::write_tracklist(&new_tracklist)?;
 
         /* update HEAD */
-        transport::change_branch(init.clone(), should_detach_head)?;
-
-        Ok(())
+        self.set_head(new_head)
     }
 
     fn copy_objects_to_files(files: FileIter, f: PathBuf) -> Result<()> {
@@ -416,18 +428,16 @@ impl Repository {
         Ok(())
     }
 
-    fn create_branch(&self, name: String) -> Result<()> {
-        transport::update_head(name, self.current_head.unwrap())
-    }
-
     pub fn log(amount: u32) -> Result<Vec<Commit>> {
         let r = Repository::from_disc()?;
-        if r.current_head.is_none() {
-            return Ok(Vec::new());
-        }
+
+        let head_hash = match r.head_hash() {
+            Ok(hash) => hash,
+            Err(_) => return Ok(Vec::new()),
+        };
 
         let mut count = 0;
-        let mut commit_iter = transport::read_commit(r.current_head.unwrap())?.into_iter();
+        let mut commit_iter = transport::read_commit(head_hash)?.into_iter();
         let mut commit_vec: Vec<Commit> = Vec::new();
 
         while let Some(commit) = commit_iter.next() {
@@ -440,6 +450,15 @@ impl Repository {
         }
 
         Ok(commit_vec)
+    }
+}
+
+impl fmt::Display for Reference {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Reference::Hash(h) => write!(f, "{}", h),
+            Reference::Branch(b) => write!(f, "branch '{}'", b),
+        }
     }
 }
 
@@ -468,8 +487,16 @@ impl Commit {
         self.tree
     }
 
+    pub fn tree(&self) -> Result<Tree> {
+        transport::read_tree(self.tree)
+    }
+
     pub fn parent_hash(&self) -> Option<Hash> {
         self.parent
+    }
+
+    pub fn parent(&self) -> Option<Result<Commit>> {
+        self.parent.map(transport::read_commit)
     }
 
     pub fn author(&self) -> &str {
@@ -518,22 +545,13 @@ impl Iterator for CommitIter {
     type Item = Result<Commit>;
 
     fn next(&mut self) -> Option<Result<Commit>> {
-        match self.commit.take() {
-            Some(out_commit) => match out_commit.parent_hash() {
-                Some(h) => {
-                    match transport::read_commit(h) {
-                        Ok(parent_commit) => self.commit = Some(parent_commit),
-                        Err(err) => return Some(Err(err)),
-                    };
-                    return Some(Ok(out_commit));
-                }
-                None => {
-                    self.commit = None;
-                    return Some(Ok(out_commit));
-                }
-            },
-            None => return None,
+        let out_commit = self.commit.take()?;
+        match out_commit.parent() {
+            Some(Ok(parent_commit)) => self.commit = Some(parent_commit),
+            Some(Err(err)) => return Some(Err(err)),
+            None => self.commit = None,
         }
+        return Some(Ok(out_commit));
     }
 }
 
@@ -668,14 +686,6 @@ impl File {
 
     pub fn contents(&self) -> Result<Vec<u8>> {
         transport::read_blob(self.hash).map(|blob| blob.into())
-    }
-
-    pub fn path(&self) -> &PathBuf {
-        &self.path
-    }
-
-    pub fn hash(&self) -> Hash {
-        self.hash
     }
 }
 
