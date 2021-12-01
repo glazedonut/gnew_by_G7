@@ -117,8 +117,7 @@ pub fn heads() -> Result<()> {
 }
 
 pub fn cat(c:Commit,p:&Path )->Result<()>{
-        let commithash=c.tree;
-        let committree= read_tree(commithash)?;
+        let committree= c.tree()?;
         let _file=Tree::file(&committree,p)?;
         let buff= _file.contents()?;
         io::stdout().write_all(&*buff)?;
