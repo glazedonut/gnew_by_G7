@@ -222,7 +222,7 @@ impl Repository {
         }
         for f in self.walk_worktree(Path::new(".")) {
             let f = f?;
-            let path = f.path();
+            let path = f.path().strip_prefix(&self.worktree).unwrap();
 
             let fstatus = match (head_files.get(path), self.is_tracked(path)) {
                 (None, true) => FileStatus::Added,
