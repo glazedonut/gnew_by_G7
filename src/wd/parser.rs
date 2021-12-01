@@ -1,6 +1,6 @@
 use crate::repo::command;
 use crate::repo::object::{Commit, Hash, Reference, Repository, Tree};
-use crate::storage::transport::{self, Result};
+use crate::storage::transport::{self, Result, read_commit};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -116,7 +116,8 @@ pub fn heads() -> Result<()> {
     Ok(())
 }
 
-pub fn cat(c: Commit, p: &Path) -> Result<()> {
+pub fn cat(chash: Hash, p: &Path) -> Result<()> {
+    let c = read_commit(chash)?;
     let committree = c.tree()?;
     let _file = Tree::file(&committree, p)?;
     let buff = _file.contents()?;
@@ -188,6 +189,7 @@ pub fn main() {
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
+        Gnew::Cat{ commit, path }=>cat(commit, &*path),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {
