@@ -1,16 +1,15 @@
 use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
-use crate::storage::transport::{self, write_commit, write_empty_repo, Result, read_tree};
+use crate::storage::transport::{self, write_commit, Result};
 use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
-use std::{env};
+use std::env;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::result;
-
 use std::str;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
@@ -26,6 +25,8 @@ pub struct Repository {
     head: Reference,
     branches: HashMap<String, Hash>,
     pub tracklist: Vec<String>,
+    worktree: PathBuf,
+    storage_dir: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,29 +127,37 @@ impl str::FromStr for Hash {
 }
 
 impl Repository {
-    pub fn new() -> Repository {
-        Repository {
+    /// Creates an empty repository in the current directory.
+    pub fn init() -> Result<Repository> {
+        let worktree = fs::canonicalize(".")?;
+        let storage_dir = worktree.join(".gnew");
+        transport::write_empty_repo()?;
+
+        Ok(Repository {
             head: Reference::Branch("main".to_owned()),
             branches: HashMap::new(),
             tracklist: Vec::<String>::new(),
-        }
+            worktree,
+            storage_dir,
+        })
     }
 
-    // creates empty repository and writes it to disc
-    pub fn create_empty() -> Result<Repository> {
-        let r = Repository::new();
+    /// Opens a repository in the current directory.
+    pub fn open() -> Result<Repository> {
+        let worktree = fs::canonicalize(".")?;
+        let storage_dir = worktree.join(".gnew");
 
-        write_empty_repo()?;
-
-        Ok(r)
-    }
-
-    pub fn from_disc() -> Result<Repository> {
         Ok(Repository {
             head: transport::read_head()?,
             branches: transport::read_branches()?,
             tracklist: transport::read_tracklist()?,
+            worktree,
+            storage_dir,
         })
+    }
+
+    pub fn storage_dir(&self) -> &Path {
+        &self.storage_dir
     }
 
     pub fn head(&self) -> &Reference {
@@ -197,7 +206,9 @@ impl Repository {
     }
 
     /// Checks if a file is tracked.
+    /// The path can be absolute or relative to the working tree.
     pub fn is_tracked(&self, path: &Path) -> bool {
+        let path = path.strip_prefix(&self.worktree).unwrap_or(path);
         self.tracklist.contains(&path.to_str().unwrap().to_owned())
     }
 
@@ -210,9 +221,9 @@ impl Repository {
             let File { path, hash } = f?;
             head_files.insert(path, hash);
         }
-        for f in self.walk_worktree() {
+        for f in self.walk_worktree(Path::new(".")) {
             let f = f?;
-            let path = f.path().strip_prefix(".").unwrap();
+            let path = f.path();
 
             let fstatus = match (head_files.get(path), self.is_tracked(path)) {
                 (None, true) => FileStatus::Added,
@@ -243,7 +254,7 @@ impl Repository {
 
     /// Writes a tree object from the working directory.
     pub fn write_tree(&self) -> Result<Tree> {
-        let mut tree = self.write_tree_rec(".".as_ref())?;
+        let mut tree = self.write_tree_rec(&self.worktree)?;
         transport::write_tree(&mut tree)?;
         Ok(tree)
     }
@@ -254,7 +265,7 @@ impl Repository {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.starts_with("./.gnew") {
+            if path.starts_with(&self.storage_dir) {
                 continue;
             }
             let fname = entry.file_name().to_str().unwrap().to_owned();
@@ -265,7 +276,7 @@ impl Repository {
                     transport::write_tree(&mut subtree)?;
                     tree.add_tree(subtree.hash(), fname)
                 }
-            } else if self.is_tracked(path.strip_prefix(".").unwrap()) {
+            } else if self.is_tracked(&path) {
                 tree.add_blob(transport::write_blob(path)?.hash(), fname)
             }
         }
@@ -278,7 +289,7 @@ impl Repository {
             Some(ref c) => c.to_string(),
             None => "".to_string(),
         };
-        let mut r = Repository::from_disc()?;
+        let mut r = Repository::open()?;
 
         let newtree: Result<Tree> = Repository::write_tree(&r);
         let _treehash = match newtree {
@@ -318,13 +329,10 @@ impl Repository {
         }
     }
 
-
-
-    fn walk_worktree(&self) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
-        WalkDir::new(".")
-            .min_depth(1)
+    fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
+        WalkDir::new(self.worktree.join(path))
             .into_iter()
-            .filter_entry(|e| !e.path().starts_with("./.gnew"))
+            .filter_entry(|e| !e.path().starts_with(&self.storage_dir))
             .filter(|e| match e {
                 Ok(e) => !e.file_type().is_dir(),
                 _ => true,
@@ -418,7 +426,7 @@ impl Repository {
     }
 
     pub fn log(amount: u32) -> Result<Vec<Commit>> {
-        let r = Repository::from_disc()?;
+        let r = Repository::open()?;
 
         let head_hash = match r.head_hash() {
             Ok(hash) => hash,
@@ -669,7 +677,6 @@ impl fmt::Display for TreeEntryKind {
 }
 
 impl File {
-
     pub fn new(path: PathBuf, hash: Hash) -> File {
         File { path, hash }
     }
@@ -678,7 +685,6 @@ impl File {
         transport::read_blob(self.hash).map(|blob| blob.into())
     }
 }
-
 
 /// An iterator over the files in a tree.
 #[derive(Debug)]
@@ -764,6 +770,6 @@ mod tests {
 
     #[test]
     fn init_repo_test() {
-        let _a1 = Repository::create_empty();
+        let _a1 = Repository::init();
     }
 }

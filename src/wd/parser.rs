@@ -89,8 +89,11 @@ pub struct CheckoutOptions {
 }
 
 pub fn init() -> Result<()> {
-    command::init()?;
-    println!("Initialized empty Gnew repository in .gnew");
+    let r = Repository::init()?;
+    println!(
+        "Initialized empty Gnew repository in {}",
+        r.storage_dir().display()
+    );
     Ok(())
 }
 
@@ -99,7 +102,7 @@ pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
 }
 
 pub fn status(tree: Hash) -> Result<()> {
-    let r = Repository::from_disc()?;
+    let r = Repository::open()?;
     let tree = transport::read_tree(tree)?;
 
     for (path, status) in r.status(&tree)? {
@@ -123,8 +126,7 @@ pub fn cat(c:Commit,p:&Path )->Result<()>{
 }
 
 pub fn checkout(o: CheckoutOptions) -> Result<()> {
-    let mut r = Repository::from_disc()?;
-
+    let mut r = Repository::open()?;
     if o.create {
         r.create_branch(&o.branch)?;
         println!("Switched to new branch '{}'", o.branch);
@@ -160,7 +162,7 @@ pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
 }
 
 pub fn write_tree() -> Result<()> {
-    println!("{}", Repository::from_disc()?.write_tree()?.hash());
+    println!("{}", Repository::open()?.write_tree()?.hash());
     Ok(())
 }
 

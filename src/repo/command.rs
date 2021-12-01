@@ -4,14 +4,9 @@ use std::fs::metadata;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-pub fn init() -> Result<()> {
-    Repository::create_empty()?;
-    Ok(())
-}
-
 // TODO: change return to vec of strings for printing. For now, we just print here
 pub fn heads() -> Result<()> {
-    let r = Repository::from_disc()?;
+    let r = Repository::open()?;
     let heads = r.branches();
 
     for h in heads {
@@ -27,7 +22,7 @@ pub fn add<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     transport::check_existence(files)?;
 
     /* read current state of repository from disc */
-    let mut r = Repository::from_disc()?;
+    let mut r = Repository::open()?;
 
     /* if file isn't tracked already, add it to tracklist
      * note that this adds directories just like files
