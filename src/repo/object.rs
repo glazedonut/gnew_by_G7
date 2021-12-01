@@ -1,6 +1,6 @@
 use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
-use crate::storage::transport::{self, read_lines_gen, write_commit, write_empty_repo, Result};
+use crate::storage::transport::{self, read_lines_gen, write_commit, write_empty_repo, Result, read_tree};
 use chrono::{DateTime, TimeZone, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
@@ -277,6 +277,19 @@ impl Repository {
         transport::update_head(branch_name, commit.hash())?;
 
         Ok(())
+    }
+    pub fn cat(c:Commit,p:&Path ){
+        let commithash=c.tree;
+        let committree= match read_tree(commithash){
+            Ok(c) => {c}
+            Err(_) => {Tree::new()}
+        };
+        let _filetree=Tree::file(&committree,p);
+        let _file= match _filetree{
+            Ok(c) => {c}
+            Err(_) => {File::new(Default::default(), Hash::new()) }
+        };
+
     }
 
     fn walk_worktree(&self) -> impl Iterator<Item = walkdir::Result<DirEntry>> {
