@@ -144,7 +144,8 @@ fn parse_reference(s: &str) -> Reference {
 }
 
 pub fn commit(message: String) -> Result<()> {
-    Repository::commit(Some(message))?;
+    let mut r=Repository::open()?;
+    r.commit(message)?;
     Ok(())
 }
 

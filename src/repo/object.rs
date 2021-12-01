@@ -282,19 +282,12 @@ impl Repository {
         Ok(tree)
     }
 
-    pub fn commit(commitmsg: Option<String>) -> Result<()> {
-        let mut _cmsg: String = "".to_string();
-        _cmsg = match commitmsg {
-            Some(ref c) => c.to_string(),
-            None => "".to_string(),
-        };
-        let mut r = Repository::open()?;
+    pub fn commit(&mut self, commitmsg: String) -> Result<()> {
 
-        let newtree: Result<Tree> = Repository::write_tree(&r);
-        let _treehash = match newtree {
-            Ok(c) => c.hash,
-            Err(..) => Hash::new(),
-        };
+
+
+        let newtree: Tree = self.write_tree()?;
+        let _treehash = newtree.hash;
         let mut user: String = "Temp user".to_string();
         let env_vars = env::vars();
         for (key, value) in env_vars.into_iter() {
@@ -305,15 +298,15 @@ impl Repository {
         let _datetime = Utc::now();
         let _newcommit = CommitInfo {
             tree: _treehash,
-            parent: r.head_hash().ok(),
+            parent: self.head_hash().ok(),
             author: user,
             time: _datetime,
-            msg: _cmsg,
+            msg: commitmsg,
         };
         let mut commit = Commit::new(_newcommit);
         let _resultcommit = write_commit(&mut commit);
 
-        r.update_head(commit.hash())
+        self.update_head(commit.hash())
     }
 
     fn update_head(&mut self, commit: Hash) -> Result<()> {
