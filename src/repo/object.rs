@@ -286,7 +286,7 @@ impl Repository {
     pub fn commit(commitmsg: Option<String>) -> Result<()> {
         let mut _cmsg: String = "".to_string();
         _cmsg = match commitmsg {
-            Some(ref cf) => c.to_string(),
+            Some(ref c) => c.to_string(),
             None => "".to_string(),
         };
         let mut r = Repository::open()?;
