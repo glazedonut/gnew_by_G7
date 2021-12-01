@@ -1,6 +1,6 @@
 use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
-use crate::storage::transport::{self, write_commit, Result};
+use crate::storage::transport::{self, Result};
 use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
@@ -222,9 +222,10 @@ impl Repository {
         }
         for f in self.walk_worktree(Path::new(".")) {
             let f = f?;
-            let path = f.path().strip_prefix(&self.worktree).unwrap();
+            let path = f.path();
+            let rpath = path.strip_prefix(&self.worktree).unwrap();
 
-            let fstatus = match (head_files.get(path), self.is_tracked(path)) {
+            let fstatus = match (head_files.get(rpath), self.is_tracked(path)) {
                 (None, true) => FileStatus::Added,
                 (None, false) => FileStatus::Untracked,
                 (Some(hash), true) => {
@@ -236,7 +237,7 @@ impl Repository {
                 }
                 (Some(_), false) => FileStatus::Deleted,
             };
-            status.insert(path.to_owned(), fstatus);
+            status.insert(rpath.to_owned(), fstatus);
         }
         for path in head_files.keys() {
             if !status.contains_key(path) {
@@ -282,28 +283,21 @@ impl Repository {
         Ok(tree)
     }
 
-    pub fn commit(&mut self, commitmsg: String) -> Result<()> {
-        let newtree: Tree = self.write_tree()?;
-        let _treehash = newtree.hash;
-        let mut user: String = "Temp user".to_string();
-        let env_vars = env::vars();
-        for (key, value) in env_vars.into_iter() {
-            if key == "USER".to_string() {
-                user = value;
-            }
-        }
-        let _datetime = Utc::now();
-        let _newcommit = CommitInfo {
-            tree: _treehash,
+    pub fn commit(&mut self, msg: String) -> Result<Commit> {
+        let tree = self.write_tree()?;
+        let user = env::var("USER").unwrap_or_else(|_| "noname".to_owned());
+
+        let mut commit = Commit::new(CommitInfo {
+            tree: tree.hash(),
             parent: self.head_hash().ok(),
             author: user,
-            time: _datetime,
-            msg: commitmsg,
-        };
-        let mut commit = Commit::new(_newcommit);
-        let _resultcommit = write_commit(&mut commit);
+            time: Utc::now(),
+            msg,
+        });
 
-        self.update_head(commit.hash())
+        transport::write_commit(&mut commit)?;
+        self.update_head(commit.hash())?;
+        Ok(commit)
     }
 
     fn update_head(&mut self, commit: Hash) -> Result<()> {
@@ -311,16 +305,6 @@ impl Repository {
             Reference::Hash(_) => self.set_head(Reference::Hash(commit)),
             Reference::Branch(b) => self.set_branch(b, commit),
         }
-    }
-
-    fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
-        WalkDir::new(self.worktree.join(path))
-            .into_iter()
-            .filter_entry(|e| !e.path().starts_with(&self.storage_dir))
-            .filter(|e| match e {
-                Ok(e) => !e.file_type().is_dir(),
-                _ => true,
-            })
     }
 
     pub fn checkout(&mut self, new_head: Reference, force: bool) -> Result<()> {
@@ -489,6 +473,16 @@ impl Repository {
         transport::write_tracklist(&self.tracklist)?;
 
         Ok(())
+    }
+
+    fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
+        WalkDir::new(self.worktree.join(path))
+            .into_iter()
+            .filter_entry(|e| !e.path().starts_with(&self.storage_dir))
+            .filter(|e| match e {
+                Ok(e) => !e.file_type().is_dir(),
+                _ => true,
+            })
     }
 }
 

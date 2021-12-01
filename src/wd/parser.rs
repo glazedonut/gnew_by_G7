@@ -155,7 +155,7 @@ fn parse_reference(s: &str) -> Reference {
 
 pub fn commit(message: String) -> Result<()> {
     let mut r = Repository::open()?;
-    r.commit(message)?;
+    println!("{}", r.commit(message)?.hash());
     Ok(())
 }
 
@@ -196,13 +196,13 @@ pub fn main() {
         Gnew::Remove { paths } => remove(&paths),
         Gnew::Status { tree } => status(tree),
         Gnew::Heads => heads(),
+        Gnew::Cat { commit, path } => cat(commit, &path),
         Gnew::Checkout(opt) => checkout(opt),
         Gnew::Commit { message } => commit(message),
         Gnew::Log { amount } => log(amount),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
-        Gnew::Cat { commit, path } => cat(commit, &*path),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {
