@@ -11,7 +11,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
 
@@ -303,17 +302,12 @@ impl Repository {
                 user = value;
             }
         }
-        let time = SystemTime::now().duration_since(UNIX_EPOCH);
-        let currtime = match time {
-            Ok(c) => c.as_millis(),
-            Err(_) => 0,
-        };
-        let _date: DateTime<Utc> = Utc.timestamp(currtime as i64, 0);
+        let _datetime = Utc::now();
         let _newcommit = CommitInfo {
             tree: _treehash,
             parent: r.head_hash().ok(),
             author: user,
-            time: _date,
+            time: _datetime,
             msg: _cmsg,
         };
         let mut commit = Commit::new(_newcommit);
