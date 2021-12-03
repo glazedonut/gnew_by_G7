@@ -351,8 +351,13 @@ impl Repository {
 
         /* read commit by hash, get tree */
         let tree = transport::read_commit(hash)?.tree()?;
-
         let status = self.status(&tree)?;
+        let mut tree_files = HashMap::new();
+
+        for f in tree.files() {
+            let File { path, hash } = f?;
+            tree_files.insert(path, hash);
+        }
 
         for f in status {
             match f.1 {
@@ -362,14 +367,12 @@ impl Repository {
                 }
                 /* file was deleted, copy over */
                 FileStatus::Deleted => {
-                    Repository::copy_objects_to_files(tree.files(), f.0)?;
+                    Repository::copy_objects_to_files(&tree_files, f.0)?;
                 }
-                /* file was modified, remove and copy over
-                 * ideally, should do something fancy to modify existing file instead of copying, but oh well
-                 */
+                /* file was modified, remove and copy over */
                 FileStatus::Modified => {
                     fs::remove_file(&f.0)?;
-                    Repository::copy_objects_to_files(tree.files(), f.0)?;
+                    Repository::copy_objects_to_files(&tree_files, f.0)?;
                 }
                 /* file is the same, do nothing */
                 FileStatus::Unmodified => continue,
@@ -386,9 +389,8 @@ impl Repository {
 
         /* update tracklist on disc */
         let mut new_tracklist = Vec::new();
-        for file in tree.files() {
-            let File { path, .. } = file?;
-            new_tracklist.push(path.to_str().unwrap().to_owned())
+        for file in tree_files {
+            new_tracklist.push(file.0.to_str().unwrap().to_owned())
         }
         transport::write_tracklist(&new_tracklist)?;
 
@@ -396,13 +398,12 @@ impl Repository {
         self.set_head(new_head)
     }
 
-    fn copy_objects_to_files(files: FileIter, f: PathBuf) -> Result<()> {
+    fn copy_objects_to_files(files: &HashMap<PathBuf, Hash>, f: PathBuf) -> Result<()> {
         for file in files {
-            let File { path, hash } = file?;
-            if path == f {
-                fs::create_dir_all(path.parent().unwrap())?;
-                let blob: Blob = transport::read_blob(hash).map(|blob| blob.into())?;
-                fs::write(path, blob.content)?;
+            if *(file.0) == f {
+                fs::create_dir_all(file.0.parent().unwrap())?;
+                let blob: Blob = transport::read_blob(*file.1).map(|blob| blob.into())?;
+                fs::write(file.0, blob.content)?;
                 break;
             }
         }

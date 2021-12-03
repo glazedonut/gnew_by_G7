@@ -26,7 +26,7 @@ enum Gnew {
         paths: Vec<PathBuf>,
     },
     /// Show the repository status
-    Status { tree: Hash },
+    Status { tree: Option<Hash> },
     /// List the heads
     Heads,
     /// Show changes between commits
@@ -108,9 +108,12 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
-pub fn status(tree: Hash) -> Result<()> {
+pub fn status(tree: Option<Hash>) -> Result<()> {
     let r = Repository::open()?;
-    let tree = transport::read_tree(tree)?;
+    let tree = match tree {
+        Some(t) => transport::read_tree(t)?,
+        None => transport::read_tree(transport::read_commit(r.head_hash().unwrap())?.tree_hash())?,
+    };
 
     for (path, status) in r.status(&tree)? {
         println!("{}:\t{:?}", path.display(), status);
