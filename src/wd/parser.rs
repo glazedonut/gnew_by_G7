@@ -111,8 +111,11 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
 pub fn status(tree: Option<Hash>) -> Result<()> {
     let r = Repository::open()?;
     let tree = match tree {
-        Some(t) => transport::read_tree(t)?,
-        None => transport::read_tree(transport::read_commit(r.head_hash().unwrap())?.tree_hash())?,
+        Some(t) => transport::read_tree(".", t)?,
+        None => transport::read_tree(
+            ".",
+            transport::read_commit(".", r.head_hash().unwrap())?.tree_hash(),
+        )?,
     };
 
     for (path, status) in r.status(&tree)? {
@@ -127,7 +130,7 @@ pub fn heads() -> Result<()> {
 }
 
 pub fn cat(chash: Hash, p: &Path) -> Result<()> {
-    let c = read_commit(chash)?;
+    let c = read_commit(".", chash)?;
     let committree = c.tree()?;
     let _file = Tree::file(&committree, p)?;
     let buff = _file.contents()?;
@@ -168,6 +171,12 @@ pub fn log(amount: u32) -> Result<()> {
     Ok(())
 }
 
+pub fn pull<P: AsRef<Path>>(remote: P) -> Result<()> {
+    let mut r = Repository::open()?;
+    r.pull(remote)?;
+    Ok(())
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     println!("{}", transport::write_blob(path)?.hash());
     Ok(())
@@ -180,9 +189,9 @@ pub fn write_tree() -> Result<()> {
 
 pub fn cat_object(type_: &str, object: Hash) -> Result<()> {
     match type_ {
-        "blob" => io::stdout().write_all(transport::read_blob(object)?.content())?,
-        "tree" => print!("{}", transport::read_tree(object)?),
-        "commit" => print!("{}", transport::read_commit(object)?),
+        "blob" => io::stdout().write_all(transport::read_blob(".", object)?.content())?,
+        "tree" => print!("{}", transport::read_tree(".", object)?),
+        "commit" => print!("{}", transport::read_commit(".", object)?),
         _ => panic!("invalid object type"),
     };
     Ok(())
@@ -203,6 +212,7 @@ pub fn main() {
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
         Gnew::Cat { commit, path } => cat(commit, &*path),
+        Gnew::Pull { repository } => pull(repository),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

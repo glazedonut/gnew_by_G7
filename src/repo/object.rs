@@ -56,6 +56,7 @@ pub struct Commit {
     author: String,
     time: DateTime<Utc>,
     msg: String,
+    path: PathBuf,
 }
 
 /// Commit metadata used to create a commit object.
@@ -66,12 +67,14 @@ pub struct CommitInfo {
     pub author: String,
     pub time: DateTime<Utc>,
     pub msg: String,
+    pub path: PathBuf,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Tree {
     hash: Hash,
     entries: Vec<TreeEntry>,
+    path: PathBuf,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +82,7 @@ pub struct TreeEntry {
     kind: TreeEntryKind,
     hash: Hash,
     name: String,
+    path: PathBuf,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,6 +103,7 @@ pub struct File {
 pub struct Blob {
     hash: Hash,
     content: Vec<u8>,
+    path: PathBuf,
 }
 
 impl Hash {
@@ -147,9 +152,22 @@ impl Repository {
         let storage_dir = worktree.join(".gnew");
 
         Ok(Repository {
-            head: transport::read_head()?,
-            branches: transport::read_branches()?,
-            tracklist: transport::read_tracklist()?,
+            head: transport::read_head(&worktree)?,
+            branches: transport::read_branches(&worktree)?,
+            tracklist: transport::read_tracklist(&worktree)?,
+            worktree,
+            storage_dir,
+        })
+    }
+
+    pub fn open_remote<P: AsRef<Path>>(remote: P) -> Result<Repository> {
+        let worktree = fs::canonicalize(remote)?;
+        let storage_dir = transport::check_repo_exists(&worktree)?;
+
+        Ok(Repository {
+            head: transport::read_head(&worktree)?,
+            branches: transport::read_branches(&worktree)?,
+            tracklist: transport::read_tracklist(&worktree)?,
             worktree,
             storage_dir,
         })
@@ -254,7 +272,7 @@ impl Repository {
     /// Writes a tree object from the working directory.
     pub fn write_tree(&self) -> Result<Tree> {
         let mut tree = self.write_tree_rec(&self.worktree)?;
-        transport::write_tree(&mut tree)?;
+        transport::write_tree(&self.worktree, &mut tree)?;
         Ok(tree)
     }
 
@@ -272,11 +290,12 @@ impl Repository {
             if entry.file_type()?.is_dir() {
                 let mut subtree = self.write_tree_rec(&path)?;
                 if !subtree.is_empty() {
-                    transport::write_tree(&mut subtree)?;
-                    tree.add_tree(subtree.hash(), fname)
+                    transport::write_tree(&self.worktree, &mut subtree)?;
+                    tree.add_tree(subtree.hash(), fname, subtree.path().clone())
                 }
             } else if self.is_tracked(&path) {
-                tree.add_blob(transport::write_blob(path)?.hash(), fname)
+                let b = transport::write_blob(path)?;
+                tree.add_blob(b.hash(), fname, b.path().clone())
             }
         }
         Ok(tree)
@@ -299,9 +318,10 @@ impl Repository {
             author: user,
             time: _datetime,
             msg: commitmsg,
+            path: self.worktree.clone(),
         };
         let mut commit = Commit::new(_newcommit);
-        let _resultcommit = write_commit(&mut commit);
+        let _resultcommit = write_commit(&self.worktree, &mut commit);
 
         self.update_head(commit.hash())
     }
@@ -333,7 +353,8 @@ impl Repository {
         /* if checkout is forced, skip the safe switch check */
         if !force {
             /* read commit by hash, get tree */
-            let curr_tree = transport::read_commit(self.head_hash().unwrap())?.tree()?;
+            let curr_tree =
+                transport::read_commit(&self.worktree, self.head_hash().unwrap())?.tree()?;
             let curr_status = self.status(&curr_tree)?;
 
             for f in curr_status {
@@ -350,7 +371,7 @@ impl Repository {
         /* next, we can do the actual checkout */
 
         /* read commit by hash, get tree */
-        let tree = transport::read_commit(hash)?.tree()?;
+        let tree = transport::read_commit(&self.worktree, hash)?.tree()?;
         let status = self.status(&tree)?;
         let mut tree_files = HashMap::new();
 
@@ -367,12 +388,12 @@ impl Repository {
                 }
                 /* file was deleted, copy over */
                 FileStatus::Deleted => {
-                    Repository::copy_objects_to_files(&tree_files, f.0)?;
+                    Repository::copy_objects_to_files(&self.worktree, &tree_files, f.0)?;
                 }
                 /* file was modified, remove and copy over */
                 FileStatus::Modified => {
                     fs::remove_file(&f.0)?;
-                    Repository::copy_objects_to_files(&tree_files, f.0)?;
+                    Repository::copy_objects_to_files(&self.worktree, &tree_files, f.0)?;
                 }
                 /* file is the same, do nothing */
                 FileStatus::Unmodified => continue,
@@ -398,11 +419,15 @@ impl Repository {
         self.set_head(new_head)
     }
 
-    fn copy_objects_to_files(files: &HashMap<PathBuf, Hash>, f: PathBuf) -> Result<()> {
+    fn copy_objects_to_files<P: AsRef<Path>>(
+        path: P,
+        files: &HashMap<PathBuf, Hash>,
+        f: PathBuf,
+    ) -> Result<()> {
         for file in files {
             if *(file.0) == f {
                 fs::create_dir_all(file.0.parent().unwrap())?;
-                let blob: Blob = transport::read_blob(*file.1).map(|blob| blob.into())?;
+                let blob: Blob = transport::read_blob(path, *file.1).map(|blob| blob.into())?;
                 fs::write(file.0, blob.content)?;
                 break;
             }
@@ -417,7 +442,7 @@ impl Repository {
         };
 
         let mut count = 0;
-        let mut commit_iter = transport::read_commit(head_hash)?.into_iter();
+        let mut commit_iter = transport::read_commit(&self.worktree, head_hash)?.into_iter();
         let mut commit_vec: Vec<Commit> = Vec::new();
 
         while let Some(commit) = commit_iter.next() {
@@ -490,6 +515,38 @@ impl Repository {
 
         Ok(())
     }
+
+    pub fn pull<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        let remote = Repository::open_remote(path)?;
+
+        let mut commits_to_add = Vec::new();
+
+        for remote_branch in remote.branches() {
+            match self.branches.get(remote_branch.0.as_str()) {
+                /* there exists a local branch with the same name as the remote one */
+                Some(local_hash) => {
+                    let remote_hash = *remote_branch.1;
+                    if *local_hash == remote_hash {
+                        continue;
+                    }
+
+                    /* go through the remote commit branch until we find
+                     * a commit with that exists in our repository
+                     */
+                    let commit_iter =
+                        transport::read_commit(&remote.worktree, remote_hash)?.into_iter();
+                    for c in commit_iter {
+                        todo!();
+                        commits_to_add.push(c);
+                    }
+                }
+                /* no local branch that's the same as remote - create local */
+                None => todo!(),
+            };
+        }
+
+        Ok(())
+    }
 }
 
 impl fmt::Display for Reference {
@@ -510,6 +567,7 @@ impl Commit {
             author: info.author,
             time: info.time,
             msg: info.msg,
+            path: info.path,
         }
     }
 
@@ -527,7 +585,7 @@ impl Commit {
     }
 
     pub fn tree(&self) -> Result<Tree> {
-        transport::read_tree(self.tree)
+        transport::read_tree(&self.path, self.tree)
     }
 
     pub fn parent_hash(&self) -> Option<Hash> {
@@ -535,7 +593,7 @@ impl Commit {
     }
 
     pub fn parent(&self) -> Option<Result<Commit>> {
-        self.parent.map(transport::read_commit)
+        self.parent.map(|p| transport::read_commit(&self.path, p))
     }
 
     pub fn author(&self) -> &str {
@@ -599,6 +657,7 @@ impl Tree {
         Tree {
             hash: Hash::new(),
             entries: vec![],
+            path: PathBuf::new(),
         }
     }
 
@@ -615,6 +674,10 @@ impl Tree {
         &self.entries
     }
 
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
     fn into_entries(self) -> vec::IntoIter<TreeEntry> {
         self.entries.into_iter()
     }
@@ -624,20 +687,22 @@ impl Tree {
     }
 
     /// Add a blob entry with the given hash and filename.
-    pub fn add_blob(&mut self, hash: Hash, name: String) {
+    pub fn add_blob(&mut self, hash: Hash, name: String, path: PathBuf) {
         self.entries.push(TreeEntry {
             kind: TreeEntryKind::Blob,
             hash,
             name,
+            path,
         })
     }
 
     /// Add a tree entry with the given hash and filename.
-    pub fn add_tree(&mut self, hash: Hash, name: String) {
+    pub fn add_tree(&mut self, hash: Hash, name: String, path: PathBuf) {
         self.entries.push(TreeEntry {
             kind: TreeEntryKind::Tree,
             hash,
             name,
+            path,
         })
     }
 
@@ -663,7 +728,7 @@ impl Tree {
     fn dir(&self, name: &OsStr) -> Result<Tree> {
         self.entry(name).and_then(|e| match e.kind() {
             TreeEntryKind::Blob => Err(FileNotFound),
-            TreeEntryKind::Tree => match transport::read_tree(e.hash()) {
+            TreeEntryKind::Tree => match transport::read_tree(&self.path, e.hash()) {
                 Err(ObjectNotFound) => Err(ObjectMissing),
                 r => r,
             },
@@ -707,6 +772,10 @@ impl TreeEntry {
     pub fn name(&self) -> &str {
         &self.name
     }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
 }
 
 impl fmt::Display for TreeEntryKind {
@@ -724,7 +793,7 @@ impl File {
     }
 
     pub fn contents(&self) -> Result<Vec<u8>> {
-        transport::read_blob(self.hash).map(|blob| blob.into())
+        transport::read_blob(&self.path, self.hash).map(|blob| blob.into())
     }
 }
 
@@ -757,7 +826,7 @@ impl Iterator for FileIter {
                     let path = self.path.join(entry.name());
                     return Some(Ok(File::new(path, entry.hash())));
                 }
-                TreeEntryKind::Tree => match transport::read_tree(entry.hash()) {
+                TreeEntryKind::Tree => match transport::read_tree(entry.path(), entry.hash()) {
                     Err(ObjectNotFound) => return Some(Err(ObjectMissing)),
                     Err(err) => return Some(Err(err)),
                     Ok(tree) => {
@@ -776,6 +845,7 @@ impl Blob {
         Blob {
             hash: Hash::new(),
             content,
+            path: PathBuf::new(),
         }
     }
 
@@ -790,6 +860,10 @@ impl Blob {
 
     pub fn content(&self) -> &[u8] {
         &self.content
+    }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
     }
 }
 

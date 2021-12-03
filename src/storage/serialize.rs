@@ -1,5 +1,6 @@
 use crate::repo::object::{Blob, Commit, CommitInfo, Tree};
 use chrono::{TimeZone, Utc};
+use std::path::Path;
 use std::str::FromStr;
 
 // Length of the string representation of a hash.
@@ -51,16 +52,16 @@ pub fn deserialize_blob(obj: &[u8]) -> Option<Blob> {
 
 /// Deserializes a tree object.
 /// Returns None if obj is not a valid tree object.
-pub fn deserialize_tree(obj: &[u8]) -> Option<Tree> {
+pub fn deserialize_tree<P: AsRef<Path>>(path: P, obj: &[u8]) -> Option<Tree> {
     let mut tree = obj
         .strip_prefix(b"tree\0")
-        .and_then(deserialize_tree_entries)?;
+        .and_then(|o| deserialize_tree_entries(path, o))?;
 
     tree.update_hash(obj);
     Some(tree)
 }
 
-fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
+fn deserialize_tree_entries<P: AsRef<Path>>(path: P, obj: &[u8]) -> Option<Tree> {
     let mut tree = Tree::new();
     let mut it = obj.split(|&b| b == b'\0');
     let first = match it.next() {
@@ -73,8 +74,8 @@ fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
         let name = parse_string(name)?;
         let hash = parse_from_utf8(hash)?;
         match kind {
-            b"blob" => tree.add_blob(hash, name),
-            b"tree" => tree.add_tree(hash, name),
+            b"blob" => tree.add_blob(hash, name, (*path.as_ref()).to_path_buf()),
+            b"tree" => tree.add_tree(hash, name, (*path.as_ref()).to_path_buf()),
             _ => return None,
         };
         Some(next)
@@ -84,16 +85,16 @@ fn deserialize_tree_entries(obj: &[u8]) -> Option<Tree> {
 
 /// Deserializes a commit object.
 /// Returns None if obj is not a valid commit object.
-pub fn deserialize_commit(obj: &[u8]) -> Option<Commit> {
+pub fn deserialize_commit<P: AsRef<Path>>(path: P, obj: &[u8]) -> Option<Commit> {
     let mut commit = obj
         .strip_prefix(b"commit\0")
-        .and_then(deserialize_commit_data)?;
+        .and_then(|o| deserialize_commit_data(path, o))?;
 
     commit.update_hash(obj);
     Some(commit)
 }
 
-fn deserialize_commit_data(obj: &[u8]) -> Option<Commit> {
+fn deserialize_commit_data<P: AsRef<Path>>(path: P, obj: &[u8]) -> Option<Commit> {
     let mut it = obj.split(|&b| b == b'\n');
     let tree = parse_from_utf8(it.next()?.strip_prefix(b"tree ")?)?;
     let mut next = it.next()?;
@@ -118,6 +119,7 @@ fn deserialize_commit_data(obj: &[u8]) -> Option<Commit> {
         author,
         time,
         msg,
+        path: (*(path.as_ref())).to_path_buf(),
     }))
 }
 
