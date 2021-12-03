@@ -1,2 +1,9 @@
-# gnew_by_G7
- 
+# Gnew
+
+Install:
+
+    cargo install --path .
+
+Run tests:
+
+    make -C tests
