@@ -434,11 +434,13 @@ impl Repository {
     pub fn add<P: AsRef<Path>>(&mut self, files: &Vec<P>) -> Result<()> {
         transport::check_existence(files)?;
 
-        for f in files {
+        for file in files {
+            let file = fs::canonicalize(file)?;
+            let f: &Path = file.strip_prefix(&self.worktree).unwrap();
             let md = fs::metadata(f).unwrap();
 
             if md.is_file() {
-                let p = f.as_ref().to_str().unwrap().to_string();
+                let p = f.to_str().unwrap().to_string();
                 if !self.tracklist.contains(&p) {
                     self.tracklist.push(p);
                 }
@@ -454,8 +456,32 @@ impl Repository {
                 for p in paths {
                     if !self.tracklist.contains(&p) {
                         self.tracklist.push(p);
-                    }   
+                    }
                 }
+            }
+        }
+
+        transport::write_tracklist(&self.tracklist)?;
+
+        Ok(())
+    }
+
+    pub fn remove<P: AsRef<Path>>(&mut self, files: &Vec<P>) -> Result<()> {
+        transport::check_existence(files)?;
+
+        for f in files {
+            let f = fs::canonicalize(f)?;
+            let p = f.strip_prefix(&self.worktree).unwrap();
+            let md = fs::metadata(p).unwrap();
+            let mut prefix = p.to_str().unwrap().to_string();
+
+            if md.is_file() {
+                self.tracklist.retain(|x| !(*x == prefix));
+            } else if md.is_dir() {
+                let mut tmp = [0u8; 4];
+                prefix = prefix + '/'.encode_utf8(&mut tmp);
+
+                self.tracklist.retain(|x| !(*x).starts_with(&prefix));
             }
         }
 

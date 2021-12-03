@@ -23,10 +23,7 @@ enum Gnew {
     /// Remove files from tracking list
     Remove {
         #[structopt(required = true)]
-        files: Vec<PathBuf>,
-
-        #[structopt(short)]
-        recursive: bool,
+        paths: Vec<PathBuf>,
     },
     /// Show the repository status
     Status { tree: Hash },
@@ -100,6 +97,13 @@ pub fn init() -> Result<()> {
 pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     let mut r = Repository::open()?;
     r.add(paths)?;
+
+    Ok(())
+}
+
+pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
+    let mut r = Repository::open()?;
+    r.remove(paths)?;
 
     Ok(())
 }
@@ -186,6 +190,7 @@ pub fn main() {
     match opt {
         Gnew::Init => init(),
         Gnew::Add { paths } => add(&paths),
+        Gnew::Remove { paths } => remove(&paths),
         Gnew::Status { tree } => status(tree),
         Gnew::Heads => heads(),
         Gnew::Checkout(opt) => checkout(opt),
