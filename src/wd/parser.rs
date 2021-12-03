@@ -27,7 +27,7 @@ enum Gnew {
         paths: Vec<PathBuf>,
     },
     /// Show the repository status
-    Status { tree: Option<Hash> },
+    Status,
     /// List the heads
     Heads,
     /// Show changes between commits
@@ -109,13 +109,13 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
-pub fn status(tree: Option<Hash>) -> Result<()> {
+pub fn status() -> Result<()> {
     let r = Repository::open()?;
-    let tree = match tree {
-        Some(t) => transport::read_tree(t)?,
-        None => transport::read_tree(transport::read_commit(r.head_hash().unwrap())?.tree_hash())?,
-    };
 
+    let tree = match r.head_hash() {
+        Ok(c) => transport::read_commit(c)?.tree()?,
+        Err(_) => Tree::new(),
+    };
     for (path, status) in r.status(&tree)? {
         println!("{}:\t{:?}", path.display(), status);
     }
@@ -208,19 +208,25 @@ pub fn main() {
     let opt = Gnew::from_args();
     match opt {
         Gnew::Init => init(),
+        Gnew::Clone {
+            repository,
+            directory,
+        } => todo!(),
         Gnew::Add { paths } => add(&paths),
         Gnew::Remove { paths } => remove(&paths),
-        Gnew::Status { tree } => status(tree),
+        Gnew::Status => status(),
         Gnew::Heads => heads(),
         Gnew::Diff { commits } => diff(&commits),
         Gnew::Cat { commit, path } => cat(commit, &path),
         Gnew::Checkout(opt) => checkout(opt),
         Gnew::Commit { message } => commit(message),
         Gnew::Log { amount } => log(amount),
+        Gnew::Merge { commit } => todo!(),
+        Gnew::Pull { repository } => todo!(),
+        Gnew::Push { repository } => todo!(),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
-        _ => todo!(),
     }
     .unwrap_or_else(|err| {
         eprintln!("fatal: {}", err);
