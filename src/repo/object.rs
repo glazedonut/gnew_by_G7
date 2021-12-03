@@ -94,6 +94,21 @@ pub struct File {
     pub hash: Hash,
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Change {
+    Add(ChangeEntry),
+    Remove(ChangeEntry),
+    Modify(ChangeEntry, ChangeEntry),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ChangeEntry {
+    /// A stored file object.
+    File(File),
+    /// A working tree path.
+    Path(PathBuf),
+}
+
 /// The hashed contents of a file.
 #[derive(Debug, PartialEq)]
 pub struct Blob {
@@ -678,6 +693,31 @@ impl Tree {
             path: PathBuf::new(),
         }
     }
+
+    /// Returns the changes between this tree and the provided one.
+    pub fn diff(&self, to: &Tree) -> Result<Vec<Change>> {
+        // This could be much faster if we pruned directories with equal hashes.
+        let mut changes = vec![];
+        let mut to_files = HashMap::new();
+
+        for f in to.files() {
+            let f = f?;
+            to_files.insert(f.path.clone(), f);
+        }
+        for from in self.files() {
+            let from = from?;
+            let change = match to_files.remove(&from.path) {
+                Some(to) if from.hash != to.hash => Change::new_modify(from, to),
+                Some(_) => continue,
+                None => Change::new_remove(from),
+            };
+            changes.push(change)
+        }
+        for to in to_files.into_values() {
+            changes.push(Change::new_add(to))
+        }
+        Ok(changes)
+    }
 }
 
 impl fmt::Display for Tree {
@@ -762,6 +802,71 @@ impl Iterator for FileIter {
                 },
             }
         }
+    }
+}
+
+impl Change {
+    pub fn new_add<T: Into<ChangeEntry>>(new: T) -> Change {
+        Change::Add(new.into())
+    }
+
+    pub fn new_remove<T: Into<ChangeEntry>>(old: T) -> Change {
+        Change::Remove(old.into())
+    }
+
+    pub fn new_modify<T, U>(old: T, new: U) -> Change
+    where
+        T: Into<ChangeEntry>,
+        U: Into<ChangeEntry>,
+    {
+        Change::Modify(old.into(), new.into())
+    }
+
+    /// Returns the path of the changed file.
+    pub fn path(&self) -> &Path {
+        match self {
+            Change::Add(e) => e,
+            Change::Remove(e) => e,
+            Change::Modify(e, _) => e,
+        }
+        .path()
+    }
+
+    /// Returns the old and new contents.
+    pub fn contents(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+        Ok(match self {
+            Change::Add(new) => (vec![], new.contents()?),
+            Change::Remove(old) => (old.contents()?, vec![]),
+            Change::Modify(old, new) => (old.contents()?, new.contents()?),
+        })
+    }
+}
+
+impl ChangeEntry {
+    pub fn path(&self) -> &Path {
+        match self {
+            ChangeEntry::File(f) => &f.path,
+            ChangeEntry::Path(p) => p,
+        }
+    }
+
+    pub fn contents(&self) -> Result<Vec<u8>> {
+        Ok(match self {
+            ChangeEntry::File(f) => f.contents()?,
+            ChangeEntry::Path(p) => fs::read(p)?,
+        })
+    }
+}
+
+impl From<File> for ChangeEntry {
+    fn from(f: File) -> ChangeEntry {
+        ChangeEntry::File(f)
+    }
+}
+
+impl From<PathBuf> for ChangeEntry {
+    fn from(p: PathBuf) -> ChangeEntry {
+        ChangeEntry::Path(p)
     }
 }
 

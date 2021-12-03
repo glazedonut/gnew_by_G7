@@ -1,6 +1,7 @@
 use crate::repo::command;
 use crate::repo::object::{Hash, Reference, Repository, Tree};
 use crate::storage::transport::{self, read_commit, Result};
+use crate::wd::ui;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -126,6 +127,21 @@ pub fn heads() -> Result<()> {
     Ok(())
 }
 
+pub fn diff(commits: &[Hash]) -> Result<()> {
+    match commits {
+        [] => todo!(),
+        [c1] => todo!(),
+        [c1, c2] => {
+            let t1 = transport::read_commit(*c1)?.tree()?;
+            let t2 = transport::read_commit(*c2)?.tree()?;
+            let changes = t1.diff(&t2)?;
+            ui::print_diff(&changes)?;
+        }
+        _ => panic!("too many arguments"),
+    }
+    Ok(())
+}
+
 pub fn cat(chash: Hash, p: &Path) -> Result<()> {
     let c = read_commit(chash)?;
     let committree = c.tree()?;
@@ -196,6 +212,7 @@ pub fn main() {
         Gnew::Remove { paths } => remove(&paths),
         Gnew::Status { tree } => status(tree),
         Gnew::Heads => heads(),
+        Gnew::Diff { commits } => diff(&commits),
         Gnew::Cat { commit, path } => cat(commit, &path),
         Gnew::Checkout(opt) => checkout(opt),
         Gnew::Commit { message } => commit(message),
