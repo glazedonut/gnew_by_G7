@@ -1,6 +1,6 @@
 use crate::repo::command;
-use crate::repo::object::{Commit, Hash, Reference, Repository, Tree};
-use crate::storage::transport::{self, Result, read_commit};
+use crate::repo::object::{Hash, Reference, Repository, Tree};
+use crate::storage::transport::{self, read_commit, Result};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -98,7 +98,10 @@ pub fn init() -> Result<()> {
 }
 
 pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
-    command::add(paths)
+    let mut r = Repository::open()?;
+    r.add(paths)?;
+
+    Ok(())
 }
 
 pub fn status(tree: Hash) -> Result<()> {
@@ -144,13 +147,14 @@ fn parse_reference(s: &str) -> Reference {
 }
 
 pub fn commit(message: String) -> Result<()> {
-    let mut r=Repository::open()?;
+    let mut r = Repository::open()?;
     r.commit(message)?;
     Ok(())
 }
 
 pub fn log(amount: u32) -> Result<()> {
-    let log = Repository::log(amount)?;
+    let r = Repository::open()?;
+    let log = r.log(amount)?;
     for l in log {
         println!("commit {}\n{}", l.hash(), l);
     }
@@ -190,7 +194,7 @@ pub fn main() {
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
-        Gnew::Cat{ commit, path }=>cat(commit, &*path),
+        Gnew::Cat { commit, path } => cat(commit, &*path),
         _ => todo!(),
     }
     .unwrap_or_else(|err| {

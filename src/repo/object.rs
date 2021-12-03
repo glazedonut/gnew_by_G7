@@ -1,7 +1,7 @@
 use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
 use crate::storage::transport::{self, write_commit, Result};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use sha1::{self, Sha1};
 use std::collections::HashMap;
 use std::env;
@@ -283,9 +283,6 @@ impl Repository {
     }
 
     pub fn commit(&mut self, commitmsg: String) -> Result<()> {
-
-
-
         let newtree: Tree = self.write_tree()?;
         let _treehash = newtree.hash;
         let mut user: String = "Temp user".to_string();
@@ -412,10 +409,8 @@ impl Repository {
         Ok(())
     }
 
-    pub fn log(amount: u32) -> Result<Vec<Commit>> {
-        let r = Repository::open()?;
-
-        let head_hash = match r.head_hash() {
+    pub fn log(&self, amount: u32) -> Result<Vec<Commit>> {
+        let head_hash = match self.head_hash() {
             Ok(hash) => hash,
             Err(_) => return Ok(Vec::new()),
         };
@@ -434,6 +429,39 @@ impl Repository {
         }
 
         Ok(commit_vec)
+    }
+
+    pub fn add<P: AsRef<Path>>(&mut self, files: &Vec<P>) -> Result<()> {
+        transport::check_existence(files)?;
+
+        for f in files {
+            let md = fs::metadata(f).unwrap();
+
+            if md.is_file() {
+                let p = f.as_ref().to_str().unwrap().to_string();
+                if !self.tracklist.contains(&p) {
+                    self.tracklist.push(p);
+                }
+            } else if md.is_dir() {
+                let mut paths: Vec<String> = Vec::new();
+
+                for entry in self.walk_worktree(f.as_ref()) {
+                    let entry = entry?;
+                    let p = entry.path().strip_prefix(&self.worktree).unwrap();
+                    paths.push(p.to_str().unwrap().to_string());
+                }
+
+                for p in paths {
+                    if !self.tracklist.contains(&p) {
+                        self.tracklist.push(p);
+                    }   
+                }
+            }
+        }
+
+        transport::write_tracklist(&self.tracklist)?;
+
+        Ok(())
     }
 }
 
