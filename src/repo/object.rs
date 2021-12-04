@@ -172,12 +172,25 @@ impl Repository {
     /// Opens a repository in the current directory.
     pub fn open() -> Result<Repository> {
         let worktree = fs::canonicalize(".")?;
-        let storage_dir = worktree.join(".gnew");
+        let storage_dir = transport::check_repo_exists(&worktree)?;
 
         Ok(Repository {
-            head: transport::read_head()?,
-            branches: transport::read_branches()?,
-            tracklist: transport::read_tracklist()?,
+            head: transport::read_head(&worktree)?,
+            branches: transport::read_branches(&worktree)?,
+            tracklist: transport::read_tracklist(&worktree)?,
+            worktree,
+            storage_dir,
+        })
+    }
+
+    pub fn open_remote<P: AsRef<Path>>(remote: P) -> Result<Repository> {
+        let worktree = fs::canonicalize(remote)?;
+        let storage_dir = transport::check_repo_exists(&worktree)?;
+
+        Ok(Repository {
+            head: transport::read_head(&worktree)?,
+            branches: transport::read_branches(&worktree)?,
+            tracklist: transport::read_tracklist(&worktree)?,
             worktree,
             storage_dir,
         })
@@ -421,6 +434,7 @@ impl Repository {
     }
 
     pub fn log(&self, amount: u32) -> Result<Vec<Commit>> {
+        println!("{:?}", self.head_hash());
         let head_hash = match self.head_hash() {
             Ok(hash) => hash,
             Err(_) => return Ok(Vec::new()),
@@ -509,6 +523,12 @@ impl Repository {
                 Ok(e) => !e.file_type().is_dir(),
                 _ => true,
             })
+    }
+
+    pub fn pull<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        let remote = Repository::open_remote(path)?;
+        println!("{:?}", remote);
+        Ok(())
     }
 }
 

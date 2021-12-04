@@ -22,6 +22,7 @@ pub enum Error {
     ObjectMissing,
     ObjectNotFound,
     ReferenceNotFound,
+    NoRepository,
 }
 
 impl error::Error for Error {}
@@ -37,6 +38,7 @@ impl fmt::Display for Error {
             ObjectMissing => write!(f, "missing object"),
             ObjectNotFound => write!(f, "object not found"),
             ReferenceNotFound => write!(f, "reference not found"),
+            NoRepository => write!(f, "no repository at file path"),
         }
     }
 }
@@ -150,14 +152,24 @@ pub fn check_existence<P: AsRef<Path>>(files: &Vec<P>) -> Result<()> {
     Ok(())
 }
 
+pub fn check_repo_exists<P: AsRef<Path>>(repo: P) -> Result<PathBuf> {
+    let gnew = Path::new(".gnew/");
+    let full_path = repo.as_ref().join(gnew);
+    if full_path.exists() {
+        Ok(full_path)
+    } else {
+        Err(NoRepository)
+    }
+}
+
 fn object_path(hash: Hash) -> PathBuf {
     let mut path = PathBuf::from(".gnew/objects");
     path.push(hash.to_string());
     path
 }
 
-pub fn read_tracklist() -> Result<Vec<String>> {
-    let path = PathBuf::from(".gnew/tracklist");
+pub fn read_tracklist<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
+    let path = path.as_ref().join(PathBuf::from(".gnew/tracklist"));
     read_lines_gen(path)
 }
 
@@ -175,8 +187,8 @@ pub fn write_head(r: &Reference) -> Result<()> {
     Ok(())
 }
 
-pub fn read_head() -> Result<Reference> {
-    let head = fs::read_to_string(".gnew/HEAD")?;
+pub fn read_head<P: AsRef<Path>>(path: P) -> Result<Reference> {
+    let head = fs::read_to_string(path.as_ref().join(Path::new(".gnew/HEAD")))?;
     let head = head.trim();
 
     Ok(match head.strip_prefix("ref: ") {
@@ -191,16 +203,22 @@ pub fn write_branch(name: &str, commit: Hash) -> Result<()> {
     Ok(())
 }
 
-pub fn read_branches() -> Result<HashMap<String, Hash>> {
+pub fn read_branches<P: AsRef<Path>>(r_path: P) -> Result<HashMap<String, Hash>> {
     let mut branches = HashMap::new();
 
-    for f in WalkDir::new(".gnew/heads") {
+    for f in WalkDir::new(r_path.as_ref().join(Path::new(".gnew/heads"))) {
         let f = f?;
         if !f.file_type().is_file() {
             continue;
         }
         let path = f.path();
-        let name = path.strip_prefix(".gnew/heads").unwrap().to_str().unwrap();
+        let name = path
+            .strip_prefix(r_path.as_ref().to_str().unwrap())
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .strip_prefix(".gnew/heads")
+            .unwrap();
         let hash = fs::read_to_string(path)?
             .trim()
             .parse()

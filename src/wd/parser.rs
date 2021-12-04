@@ -183,6 +183,12 @@ pub fn log(amount: u32) -> Result<()> {
     Ok(())
 }
 
+pub fn pull<P: AsRef<Path>>(path: P) -> Result<()> {
+    let mut r = Repository::open()?;
+    r.pull(path)?;
+    Ok(())
+}
+
 pub fn hash_file<P: AsRef<Path>>(path: P) -> Result<()> {
     println!("{}", transport::write_blob(path)?.hash());
     Ok(())
@@ -221,7 +227,7 @@ pub fn main() {
         Gnew::Commit { message } => commit(message),
         Gnew::Log { amount } => log(amount),
         Gnew::Merge { commit } => todo!(),
-        Gnew::Pull { repository } => todo!(),
+        Gnew::Pull { repository } => pull(repository),
         Gnew::Push { repository } => todo!(),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
