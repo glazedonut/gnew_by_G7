@@ -354,7 +354,7 @@ impl Repository {
 
         /* if checkout is forced, skip the safe switch check */
         if !force {
-            self.check_safe_switch()?
+            self.check_safe_switch()?;
         }
 
         /* next, we can do the actual checkout */
@@ -535,6 +535,8 @@ impl Repository {
     }
 
     pub fn pull<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+        self.check_safe_switch()?;
+
         let remote = Repository::open_remote(path)?;
 
         let mut remote_objects = transport::get_objects(&remote.storage_dir)?;
