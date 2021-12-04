@@ -512,7 +512,29 @@ impl Repository {
 
         Ok(())
     }
-
+    // i need to fix dst. being moved, but otherwise fine
+    // fn clone_recur(src: impl AsRef<Path>, dst: impl AsRef<Path> ) -> Result<()>
+    // {
+    //     fs::create_dir_all(dst);
+    //     for entry in fs::read_dir(src)? // originally was going to use walkdir, might still be a better choice
+    //     {
+    //         let entry = entry?;
+    //         let src_path = entry.path();
+    //         if entry.file_type()?.is_dir()
+    //         {
+    //             Self::clone_recur(entry.path(),dst.as_ref().join(entry.file_name()));
+    //         } else{
+    //             fs::copy(src_path, dst.as_ref().join(entry.file_name()));
+    //         }
+    //     }
+    //     Ok(())
+    // }
+    // pub fn clone(dst: impl AsRef<Path>)->Result<()>{
+    //     let rt = PathBuf::from(".gnew");
+    //     Self::clone_recur(rt,dst);
+    //     Ok(())
+    // }
+    
     fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
         WalkDir::new(self.worktree.join(path))
             .into_iter()
