@@ -152,15 +152,13 @@ pub fn cat(chash: Hash, p: &Path) -> Result<()> {
 
 pub fn checkout(o: CheckoutOptions) -> Result<()> {
     let mut r = Repository::open()?;
-    let mut new = "";
     if o.create {
         r.create_branch(&o.branch)?;
-        new = "new";
-    }
-    if o.branch != "HEAD" {
+        println!("Switched to new branch '{}'", o.branch);
+    } else if o.branch != "HEAD" {
         let new_head = parse_reference(&o.branch);
         r.checkout(new_head.clone(), o.force)?;
-        println!("Switched to {} {}", new, new_head);
+        println!("Switched to {}", new_head);
     }
     Ok(())
 }
@@ -188,6 +186,12 @@ pub fn log(amount: u32) -> Result<()> {
 pub fn pull<P: AsRef<Path>>(path: P) -> Result<()> {
     let mut r = Repository::open()?;
     r.pull(path)?;
+    Ok(())
+}
+
+pub fn push<P: AsRef<Path>>(path: P) -> Result<()> {
+    let r = Repository::open()?;
+    r.push(path)?;
     Ok(())
 }
 
@@ -230,7 +234,7 @@ pub fn main() {
         Gnew::Log { amount } => log(amount),
         Gnew::Merge { commit } => todo!(),
         Gnew::Pull { repository } => pull(repository),
-        Gnew::Push { repository } => todo!(),
+        Gnew::Push { repository } => push(repository),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),

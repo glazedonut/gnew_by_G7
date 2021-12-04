@@ -216,6 +216,7 @@ impl Repository {
     }
 
     fn set_head(&mut self, head: Reference) -> Result<()> {
+        transport::write_head(&head)?;
         Ok(self.head = head)
     }
 
@@ -225,6 +226,10 @@ impl Repository {
 
     pub fn branches(&self) -> &HashMap<String, Hash> {
         &self.branches
+    }
+
+    pub fn branches_mut(&mut self) -> &mut HashMap<String, Hash> {
+        &mut self.branches
     }
 
     fn set_branch(&mut self, name: &str, hash: Hash) -> Result<()> {
@@ -405,7 +410,6 @@ impl Repository {
         transport::write_tracklist(&new_tracklist)?;
 
         /* update HEAD */
-        transport::write_head(&new_head)?;
         self.set_head(new_head)
     }
 
@@ -523,7 +527,7 @@ impl Repository {
     //     Self::clone_recur(rt,dst);
     //     Ok(())
     // }
-    
+
     fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
         WalkDir::new(self.worktree.join(path))
             .into_iter()
@@ -577,6 +581,40 @@ impl Repository {
 
         /* switch to latest version of branch head */
         self.checkout(self.head.clone(), true)?;
+
+        Ok(())
+    }
+
+    pub fn push<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        self.check_safe_switch()?;
+
+        let mut remote = Repository::open_remote(path)?;
+
+        let remote_objects = transport::get_objects(&remote.storage_dir)?;
+        let mut local_objects = transport::get_objects(&self.storage_dir)?;
+
+        for local_branch in &self.branches {
+            match remote.branches_mut().get_mut(local_branch.0) {
+                Some(remote_hash) => {
+                    if local_objects.contains(&PathBuf::from(remote_hash.to_string())) {
+                        *remote_hash = *local_branch.1;
+                    } else {
+                        return Err(PushFailed);
+                    }
+                }
+                None => {
+                    /* no remote branch by the name, create new */
+                    remote
+                        .branches_mut()
+                        .insert((*local_branch.0).to_string(), *local_branch.1);
+                }
+            };
+        }
+
+        todo!();
+
+        local_objects.retain(|x| !remote_objects.contains(x));
+        transport::copy_objects(&self.storage_dir, &remote.storage_dir, local_objects)?;
 
         Ok(())
     }

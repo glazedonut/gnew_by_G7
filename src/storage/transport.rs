@@ -23,6 +23,7 @@ pub enum Error {
     ObjectNotFound,
     ReferenceNotFound,
     NoRepository,
+    PushFailed,
 }
 
 impl error::Error for Error {}
@@ -31,7 +32,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             BranchExists => write!(f, "branch already exists"),
-            CheckoutFailed => write!(f, "checkout failed: commit or remove changes"),
+            CheckoutFailed => write!(f, "commit or remove changes first"),
             FileNotFound => write!(f, "file not found"),
             IoError(error) => write!(f, "IO error: {}", error),
             ObjectCorrupted => write!(f, "corrupted object"),
@@ -39,6 +40,7 @@ impl fmt::Display for Error {
             ObjectNotFound => write!(f, "object not found"),
             ReferenceNotFound => write!(f, "reference not found"),
             NoRepository => write!(f, "no repository at file path"),
+            PushFailed => write!(f, "local and remote repositories differ. pull first"),
         }
     }
 }
