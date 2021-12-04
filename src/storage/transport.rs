@@ -217,7 +217,7 @@ pub fn read_branches<P: AsRef<Path>>(r_path: P) -> Result<HashMap<String, Hash>>
             .unwrap()
             .to_str()
             .unwrap()
-            .strip_prefix(".gnew/heads")
+            .strip_prefix(".gnew/heads/")
             .unwrap();
         let hash = fs::read_to_string(path)?
             .trim()

@@ -216,7 +216,6 @@ impl Repository {
     }
 
     fn set_head(&mut self, head: Reference) -> Result<()> {
-        transport::write_head(&head)?;
         Ok(self.head = head)
     }
 
@@ -434,7 +433,6 @@ impl Repository {
     }
 
     pub fn log(&self, amount: u32) -> Result<Vec<Commit>> {
-        println!("{:?}", self.head_hash());
         let head_hash = match self.head_hash() {
             Ok(hash) => hash,
             Err(_) => return Ok(Vec::new()),
