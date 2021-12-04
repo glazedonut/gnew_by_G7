@@ -354,19 +354,7 @@ impl Repository {
 
         /* if checkout is forced, skip the safe switch check */
         if !force {
-            /* read commit by hash, get tree */
-            let curr_tree = transport::read_commit(self.head_hash().unwrap())?.tree()?;
-            let curr_status = self.status(&curr_tree)?;
-
-            for f in curr_status {
-                match f.1 {
-                    FileStatus::Untracked
-                    | FileStatus::Added
-                    | FileStatus::Deleted
-                    | FileStatus::Modified => return Err(CheckoutFailed),
-                    FileStatus::Unmodified | FileStatus::Missing => continue,
-                };
-            }
+            self.check_safe_switch()?
         }
 
         /* next, we can do the actual checkout */
@@ -417,6 +405,7 @@ impl Repository {
         transport::write_tracklist(&new_tracklist)?;
 
         /* update HEAD */
+        transport::write_head(&new_head)?;
         self.set_head(new_head)
     }
 
@@ -525,7 +514,64 @@ impl Repository {
 
     pub fn pull<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
         let remote = Repository::open_remote(path)?;
-        println!("{:?}", remote);
+
+        let mut remote_objects = transport::get_objects(&remote.storage_dir)?;
+        let local_objects = transport::get_objects(&self.storage_dir)?;
+
+        for remote_branch in remote.branches() {
+            match self.branches.get_mut(remote_branch.0) {
+                /* a local branch with the same name exists */
+                Some(local_hash) => {
+                    if remote_objects.contains(&PathBuf::from(local_hash.to_string())) {
+                        /* if the last commit of the branch is stored in remote repo,
+                         * can skip "fast-forward" merge by just moving the branch hash
+                         */
+                        *local_hash = *remote_branch.1;
+                    } else {
+                        /* have to merge */
+                        println!("merge");
+                        todo!();
+                    }
+                }
+                /* no local branch by the name, create new */
+                None => {
+                    self.branches
+                        .insert((*remote_branch.0).to_string(), *remote_branch.1);
+                }
+            };
+        }
+
+        /* remove any objects that already exist */
+        remote_objects.retain(|x| !local_objects.contains(x));
+        /* copy objects from remote to local */
+        transport::copy_objects(&remote.storage_dir, &self.storage_dir, remote_objects)?;
+
+        /* update local branches on disk */
+        for b in &self.branches {
+            transport::write_branch(&b.0, *b.1)?;
+        }
+
+        /* switch to latest version of branch head */
+        self.checkout(self.head.clone(), true)?;
+
+        Ok(())
+    }
+
+    fn check_safe_switch(&self) -> Result<()> {
+        /* read commit by hash, get tree */
+        let curr_tree = transport::read_commit(self.head_hash().unwrap())?.tree()?;
+        let curr_status = self.status(&curr_tree)?;
+
+        for f in curr_status {
+            match f.1 {
+                FileStatus::Untracked
+                | FileStatus::Added
+                | FileStatus::Deleted
+                | FileStatus::Modified => return Err(CheckoutFailed),
+                FileStatus::Unmodified | FileStatus::Missing => continue,
+            };
+        }
+
         Ok(())
     }
 }

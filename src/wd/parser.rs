@@ -152,13 +152,15 @@ pub fn cat(chash: Hash, p: &Path) -> Result<()> {
 
 pub fn checkout(o: CheckoutOptions) -> Result<()> {
     let mut r = Repository::open()?;
+    let mut new = "";
     if o.create {
         r.create_branch(&o.branch)?;
-        println!("Switched to new branch '{}'", o.branch);
-    } else if o.branch != "HEAD" {
+        new = "new";
+    }
+    if o.branch != "HEAD" {
         let new_head = parse_reference(&o.branch);
         r.checkout(new_head.clone(), o.force)?;
-        println!("Switched to {}", new_head);
+        println!("Switched to {} {}", new, new_head);
     }
     Ok(())
 }

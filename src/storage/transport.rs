@@ -229,6 +229,31 @@ pub fn read_branches<P: AsRef<Path>>(r_path: P) -> Result<HashMap<String, Hash>>
     Ok(branches)
 }
 
+pub fn get_objects<P: AsRef<Path>>(path: P) -> Result<Vec<PathBuf>> {
+    let objects_dir = path.as_ref().join(Path::new("objects"));
+    let objects = fs::read_dir(&objects_dir)?;
+    Ok(objects
+        .map(|x| {
+            x.unwrap()
+                .path()
+                .strip_prefix(&objects_dir)
+                .unwrap()
+                .to_path_buf()
+        })
+        .collect::<Vec<PathBuf>>())
+}
+
+pub fn copy_objects<P: AsRef<Path>>(from: P, to: P, objects: Vec<PathBuf>) -> Result<()> {
+    let from_path = from.as_ref().join(Path::new("objects/"));
+    let to_path = to.as_ref().join(Path::new("objects/"));
+
+    for o in objects {
+        fs::copy(from_path.join(&o), to_path.join(&o))?;
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
