@@ -1,8 +1,17 @@
-use crate::repo::object::Change;
+use crate::repo::object::{Change, FileStatus, Status};
 use crate::storage::transport::Result;
 use similar::TextDiff;
 use std::io;
 use std::path::{Path, PathBuf};
+
+pub fn print_status(status: &Status) {
+    for (path, fstatus) in status {
+        match fstatus {
+            FileStatus::Unmodified => (),
+            _ => println!("{} {}", fstatus.code(), path.display()),
+        }
+    }
+}
 
 /// Outputs the changes as a unified diff.
 pub fn print_diff(changes: &[Change]) -> Result<()> {

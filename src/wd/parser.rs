@@ -116,9 +116,8 @@ pub fn status() -> Result<()> {
         Ok(c) => transport::read_commit(c)?.tree()?,
         Err(_) => Tree::new(),
     };
-    for (path, status) in r.status(&tree)? {
-        println!("{}:\t{:?}", path.display(), status);
-    }
+    ui::print_status(&r.status(&tree)?);
+
     Ok(())
 }
 

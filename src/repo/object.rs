@@ -48,6 +48,19 @@ pub enum FileStatus {
     Missing,
 }
 
+impl FileStatus {
+    pub fn code(&self) -> char {
+        match self {
+            FileStatus::Untracked => '?',
+            FileStatus::Unmodified => ' ',
+            FileStatus::Modified => 'M',
+            FileStatus::Added => 'A',
+            FileStatus::Deleted => 'R',
+            FileStatus::Missing => '!',
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Commit {
     hash: Hash,
@@ -240,11 +253,11 @@ impl Repository {
             let path = f.path();
             let rpath = path.strip_prefix(&self.worktree).unwrap();
 
-            let fstatus = match (head_files.get(rpath), self.is_tracked(path)) {
+            let fstatus = match (head_files.remove(rpath), self.is_tracked(path)) {
                 (None, true) => FileStatus::Added,
                 (None, false) => FileStatus::Untracked,
                 (Some(hash), true) => {
-                    if hash_file(path)? == *hash {
+                    if hash_file(path)? == hash {
                         FileStatus::Unmodified
                     } else {
                         FileStatus::Modified
@@ -254,15 +267,13 @@ impl Repository {
             };
             status.insert(rpath.to_owned(), fstatus);
         }
-        for path in head_files.keys() {
-            if !status.contains_key(path) {
-                let fstatus = if self.is_tracked(path) {
-                    FileStatus::Missing
-                } else {
-                    FileStatus::Deleted
-                };
-                status.insert(path.to_owned(), fstatus);
-            }
+        for path in head_files.into_keys() {
+            let fstatus = if self.is_tracked(&path) {
+                FileStatus::Missing
+            } else {
+                FileStatus::Deleted
+            };
+            status.insert(path, fstatus);
         }
         Ok(status)
     }
@@ -914,18 +925,15 @@ mod tests {
         let _a1 = Repository::init();
     }
     #[test]
-    fn add_test(){
-
+    fn add_test() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
         path.push("object.rs");
         let mut r = Repository::open().unwrap();
-       r.add( &vec![path]);
+        r.add(&vec![path]);
     }
     #[test]
-    fn commit_test(){
+    fn commit_test() {
         let mut r = Repository::open().unwrap();
         r.commit("test commit".to_string());
-
     }
-
 }
