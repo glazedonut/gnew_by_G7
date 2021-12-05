@@ -1,6 +1,6 @@
 use crate::repo::command;
-use crate::repo::object::{Hash, Reference, Repository, Tree};
-use crate::storage::transport::{self, read_commit, Result};
+use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
+use crate::storage::transport::{self, read_commit, Error, Result};
 use crate::wd::ui;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -205,6 +205,23 @@ pub fn log(amount: u32) -> Result<()> {
     Ok(())
 }
 
+pub fn merge(commit: Hash) -> Result<()> {
+    let mut r = Repository::open()?;
+    match r.merge(commit) {
+        Ok(MergeStrategy::FastForward) => println!("Fast-forward"),
+        Ok(_) => println!("Merge complete: remember to commit."),
+        Err(Error::MergeFailed(conflicts)) => {
+            for path in conflicts {
+                eprintln!("Merge conflict in {}", path.display())
+            }
+            eprintln!("Merge failed: fix conflicts and commit the result.");
+            std::process::exit(1)
+        }
+        Err(err) => return Err(err),
+    };
+    Ok(())
+}
+
 pub fn pull<P: AsRef<Path>>(path: P, all: bool) -> Result<()> {
     let mut r = Repository::open()?;
     r.pull(path, all)?;
@@ -254,7 +271,7 @@ pub fn main() {
         Gnew::Checkout(opt) => checkout(opt),
         Gnew::Commit { message } => commit(message),
         Gnew::Log { amount } => log(amount),
-        Gnew::Merge { commit } => todo!(),
+        Gnew::Merge { commit } => merge(commit),
         Gnew::Pull { repository, all } => pull(repository, all),
         Gnew::Push { repository, all } => push(repository, all),
         Gnew::HashFile { path } => hash_file(path),

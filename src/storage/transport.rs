@@ -16,8 +16,11 @@ pub type Result<T> = result::Result<T, Error>;
 pub enum Error {
     BranchExists,
     CheckoutFailed,
+    DirtyWorktree,
     FileNotFound,
     IoError(io::Error),
+    MergeFailed(Vec<PathBuf>),
+    NothingToMerge,
     ObjectCorrupted,
     ObjectMissing,
     ObjectNotFound,
@@ -33,8 +36,11 @@ impl fmt::Display for Error {
         match self {
             BranchExists => write!(f, "branch already exists"),
             CheckoutFailed => write!(f, "commit or remove changes first"),
+            DirtyWorktree => write!(f, "dirty work tree"),
             FileNotFound => write!(f, "file not found"),
             IoError(error) => write!(f, "IO error: {}", error),
+            MergeFailed(_) => write!(f, "merge failed"),
+            NothingToMerge => write!(f, "nothing to merge"),
             ObjectCorrupted => write!(f, "corrupted object"),
             ObjectMissing => write!(f, "missing object"),
             ObjectNotFound => write!(f, "object not found"),

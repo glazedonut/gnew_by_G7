@@ -2,8 +2,9 @@ use crate::storage::serialize::serialize_blob;
 use crate::storage::transport::Error::*;
 use crate::storage::transport::{self, Result};
 use chrono::{DateTime, Utc};
+use diffy;
 use sha1::{self, Sha1};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::ffi::OsStr;
 use std::fmt;
@@ -17,7 +18,7 @@ use walkdir::{self, DirEntry, WalkDir};
 
 const MAX_TREE_DEPTH: usize = 1024;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Hash(sha1::Digest);
 
 #[derive(Debug)]
@@ -62,7 +63,13 @@ impl FileStatus {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MergeStrategy {
+    FastForward,
+    ThreeWay,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Commit {
     hash: Hash,
     tree: Hash,
@@ -395,7 +402,7 @@ impl Repository {
                 /* if checkout was forced, delete the untracked file */
                 FileStatus::Untracked => {
                     if force {
-                        fs::remove_file(self.worktree.join((f.0)))?
+                        fs::remove_file(self.worktree.join(f.0))?
                     } else {
                         return Err(CheckoutFailed);
                     }
@@ -556,6 +563,94 @@ impl Repository {
             changes.push(Change::new_remove(from))
         }
         Ok(changes)
+    }
+
+    pub fn merge(&mut self, commit: Hash) -> Result<MergeStrategy> {
+        let ours = transport::read_commit(self.head_hash()?)?;
+        let theirs = transport::read_commit(commit)?;
+        let base = ours.clone().into_common_ancestor(theirs.clone())?;
+
+        if base.hash == theirs.hash {
+            return Err(NothingToMerge);
+        }
+        self.is_clean(&ours.tree()?)?;
+
+        if base.hash == ours.hash {
+            let old_head = self.head.clone();
+            self.checkout(Reference::Hash(theirs.hash), false)?;
+
+            if let Reference::Branch(b) = &old_head {
+                self.set_branch(b, theirs.hash)?;
+                self.set_head(old_head)?;
+            }
+            return Ok(MergeStrategy::FastForward);
+        }
+
+        let filemap = |c: &Commit| -> Result<_> {
+            let mut m = HashMap::new();
+            for f in c.tree()?.files() {
+                let f = f?;
+                m.insert(f.path.to_owned(), f);
+            }
+            Ok(m)
+        };
+        let ourfiles = filemap(&ours)?;
+        let theirfiles = filemap(&theirs)?;
+        let basefiles = filemap(&base)?;
+        let all: HashSet<_> = ourfiles.keys().chain(theirfiles.keys()).collect();
+        let mut conflicts = vec![];
+
+        for path in all {
+            let ours = ourfiles.get(path);
+            let base = basefiles.get(path);
+            let theirs = theirfiles.get(path);
+
+            match (ours, base, theirs) {
+                // Theirs added it
+                (None, None, Some(theirs)) => {
+                    fs::create_dir_all(path.parent().unwrap())?;
+                    fs::write(path, theirs.contents()?)?;
+                    self.tracklist.push(path.to_str().unwrap().to_owned())
+                }
+                // Ours didn't change it, theirs removed it
+                (Some(ours), Some(base), None) if ours.hash == base.hash => {
+                    fs::remove_file(path)?;
+                    self.tracklist.retain(|p| p != path.to_str().unwrap());
+                }
+                // Ours removed it, theirs didn't change it
+                (None, Some(base), Some(theirs)) if base.hash == theirs.hash => (),
+                // Merge needed
+                _ => {
+                    let contents = |f: Option<&File>| f.map_or_else(|| Ok(vec![]), File::contents);
+                    let base = contents(base)?;
+                    let ours = contents(ours)?;
+                    let theirs = contents(theirs)?;
+
+                    let b = diffy::merge_bytes(&base, &ours, &theirs).unwrap_or_else(|b| {
+                        conflicts.push(path.to_owned());
+                        b
+                    });
+                    fs::write(path, &b)?;
+                }
+            }
+        }
+        transport::write_tracklist(&self.worktree, &self.tracklist)?;
+
+        if conflicts.is_empty() {
+            Ok(MergeStrategy::ThreeWay)
+        } else {
+            Err(MergeFailed(conflicts))
+        }
+    }
+
+    fn is_clean(&self, tree: &Tree) -> Result<()> {
+        for fstatus in self.status(tree)?.values() {
+            match fstatus {
+                FileStatus::Unmodified | FileStatus::Untracked => (),
+                _ => return Err(DirtyWorktree),
+            }
+        }
+        Ok(())
     }
 
     fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
@@ -795,6 +890,30 @@ impl Commit {
 
     pub fn into_iter(self) -> CommitIter {
         CommitIter { commit: Some(self) }
+    }
+
+    pub fn into_common_ancestor(self, other: Commit) -> Result<Commit> {
+        let mut ita = self.into_iter();
+        let mut itb = other.into_iter();
+        let mut amap = HashMap::new();
+        let mut bmap = HashMap::new();
+
+        loop {
+            match ita.next().transpose()? {
+                Some(c) if bmap.contains_key(&c.hash) => return Ok(c),
+                Some(c) => {
+                    amap.insert(c.hash, c);
+                }
+                None => (),
+            }
+            match itb.next().transpose()? {
+                Some(c) if amap.contains_key(&c.hash) => return Ok(c),
+                Some(c) => {
+                    bmap.insert(c.hash, c);
+                }
+                None => (),
+            }
+        }
     }
 }
 
