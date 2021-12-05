@@ -538,7 +538,7 @@ impl Repository {
             })
     }
 
-    pub fn pull<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
+    pub fn pull<P: AsRef<Path>>(&mut self, path: P, all: bool) -> Result<()> {
         self.check_safe_switch()?;
 
         let remote = Repository::open_remote(path)?;
@@ -546,27 +546,64 @@ impl Repository {
         let mut remote_objects = transport::get_objects(&remote.storage_dir)?;
         let local_objects = transport::get_objects(&self.storage_dir)?;
 
-        for remote_branch in remote.branches() {
-            match self.branches.get_mut(remote_branch.0) {
-                /* a local branch with the same name exists */
-                Some(local_hash) => {
-                    if remote_objects.contains(&PathBuf::from(local_hash.to_string())) {
-                        /* if the last commit of the branch is stored in remote repo,
-                         * can skip "fast-forward" merge by just moving the branch hash
-                         */
-                        *local_hash = *remote_branch.1;
-                    } else {
-                        /* have to merge */
-                        println!("merge");
-                        todo!();
+        if all {
+            /* copy over all the branches */
+            for remote_branch in remote.branches() {
+                match self.branches.get_mut(remote_branch.0) {
+                    /* a local branch with the same name exists */
+                    Some(local_hash) => {
+                        if remote_objects.contains(&PathBuf::from(local_hash.to_string())) {
+                            /* if the last commit of the branch is stored in remote repo,
+                             * can skip "fast-forward" merge by just moving the branch hash
+                             */
+                            *local_hash = *remote_branch.1;
+                        } else {
+                            /* have to merge */
+                            println!("merge");
+                            todo!();
+                        }
                     }
-                }
-                /* no local branch by the name, create new */
-                None => {
-                    self.branches
-                        .insert((*remote_branch.0).to_string(), *remote_branch.1);
-                }
+                    /* no local branch by the name, create new */
+                    None => {
+                        self.branches
+                            .insert((*remote_branch.0).to_string(), *remote_branch.1);
+                    }
+                };
+            }
+
+            /* update local branches on disk */
+            for b in &self.branches {
+                transport::write_branch(&b.0, *b.1)?;
+            }
+        } else {
+            /* current branch name
+             * return ReferenceNotFound if HEAD detached
+             */
+            let curr_branch = match &self.head {
+                Reference::Branch(name) => name.clone(),
+                Reference::Hash(_) => return Err(ReferenceNotFound),
             };
+
+            /* hash of head of remote branch by the local name
+             * return ReferenceNotFound if remote repo has no local branch
+             */
+            let remote_hash = match remote.branches().get(&curr_branch) {
+                Some(h) => h,
+                None => return Err(ReferenceNotFound),
+            };
+
+            let local_hash = self.head_hash()?;
+
+            if remote_objects.contains(&PathBuf::from(local_hash.to_string())) {
+                /* if the last commit of the branch is stored in remote repo,
+                 * can skip "fast-forward" merge by just moving the branch hash
+                 */
+                self.set_branch(&curr_branch, *remote_hash)?;
+            } else {
+                /* have to merge */
+                println!("merge");
+                todo!();
+            }
         }
 
         /* remove any objects that already exist */
@@ -574,18 +611,13 @@ impl Repository {
         /* copy objects from remote to local */
         transport::copy_objects(&remote.storage_dir, &self.storage_dir, remote_objects)?;
 
-        /* update local branches on disk */
-        for b in &self.branches {
-            transport::write_branch(&b.0, *b.1)?;
-        }
-
         /* switch to latest version of branch head */
         self.checkout(self.head.clone(), true)?;
 
         Ok(())
     }
 
-    pub fn push<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+    pub fn push<P: AsRef<Path>>(&self, path: P, all: bool) -> Result<()> {
         self.check_safe_switch()?;
 
         let mut remote = Repository::open_remote(path)?;

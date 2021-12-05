@@ -49,9 +49,19 @@ enum Gnew {
     /// Merge two commits
     Merge { commit: Hash },
     /// Pull changes from another repository
-    Pull { repository: PathBuf },
+    Pull {
+        repository: PathBuf,
+
+        #[structopt(short, long)]
+        all: bool,
+    },
     /// Push changes to another repository
-    Push { repository: PathBuf },
+    Push {
+        repository: PathBuf,
+
+        #[structopt(short, long)]
+        all: bool,
+    },
 
     // Low-level commands
     //
@@ -183,15 +193,15 @@ pub fn log(amount: u32) -> Result<()> {
     Ok(())
 }
 
-pub fn pull<P: AsRef<Path>>(path: P) -> Result<()> {
+pub fn pull<P: AsRef<Path>>(path: P, all: bool) -> Result<()> {
     let mut r = Repository::open()?;
-    r.pull(path)?;
+    r.pull(path, all)?;
     Ok(())
 }
 
-pub fn push<P: AsRef<Path>>(path: P) -> Result<()> {
+pub fn push<P: AsRef<Path>>(path: P, all: bool) -> Result<()> {
     let r = Repository::open()?;
-    r.push(path)?;
+    r.push(path, all)?;
     Ok(())
 }
 
@@ -233,8 +243,8 @@ pub fn main() {
         Gnew::Commit { message } => commit(message),
         Gnew::Log { amount } => log(amount),
         Gnew::Merge { commit } => todo!(),
-        Gnew::Pull { repository } => pull(repository),
-        Gnew::Push { repository } => push(repository),
+        Gnew::Pull { repository, all } => pull(repository, all),
+        Gnew::Push { repository, all } => push(repository, all),
         Gnew::HashFile { path } => hash_file(path),
         Gnew::WriteTree => write_tree(),
         Gnew::CatObject { type_, object } => cat_object(&type_, object),
