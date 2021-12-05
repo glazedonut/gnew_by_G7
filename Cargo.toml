@@ -14,3 +14,4 @@ sha1 = { version = "0.6.0", features = ["std"] }
 similar = { version = "2.1.0", features = ["bytes"] }
 structopt = "0.3.25"
 walkdir = "2"
+fs_extra = "1.2.0"
