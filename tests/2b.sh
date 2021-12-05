@@ -2,12 +2,7 @@
 
 . ./test-lib.sh
 
-test_expect_success 'checkout updates working tree' '
-	test_commit foo foo.txt &&
-	gnew checkout -b other &&
-	test_commit foobar foo.txt &&
-	gnew checkout main &&
-	grep foo foo.txt &&
-	gnew checkout other &&
-	grep foobar foo.txt
+test_expect_success 'add does not add nonexisting files to tracklist' '
+	! gnew add test.txt 2>out &&
+	grep "fatal: file not found" out
 '
