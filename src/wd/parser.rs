@@ -1,6 +1,6 @@
 use crate::repo::command;
 use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
-use crate::storage::transport::{self, read_commit, Error, Result};
+use crate::storage::transport::{self, Error, Result};
 use crate::wd::ui;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
@@ -33,10 +33,10 @@ enum Gnew {
     /// Show changes between commits
     Diff {
         #[structopt(max_values = 2)]
-        commits: Vec<Hash>,
+        commits: Vec<String>,
     },
     /// Output a file at a commit
-    Cat { commit: Hash, path: PathBuf },
+    Cat { commit: String, path: PathBuf },
     /// Update the working directory
     Checkout(CheckoutOptions),
     /// Commit changes to the repository
@@ -47,7 +47,7 @@ enum Gnew {
         amount: u32,
     },
     /// Merge two commits
-    Merge { commit: Hash },
+    Merge { commit: String },
     /// Pull changes from another repository
     Pull {
         repository: PathBuf,
@@ -136,7 +136,7 @@ pub fn heads() -> Result<()> {
     Ok(())
 }
 
-pub fn diff(commits: &[Hash]) -> Result<()> {
+pub fn diff(commits: &[String]) -> Result<()> {
     let r = Repository::open()?;
 
     let changes = match commits {
@@ -148,12 +148,15 @@ pub fn diff(commits: &[Hash]) -> Result<()> {
             r.diff_worktree(&tree)
         }
         [c1] => {
-            let tree = transport::read_commit(*c1)?.tree()?;
+            let c1 = r.rev_parse(c1)?;
+            let tree = transport::read_commit(c1)?.tree()?;
             r.diff_worktree(&tree)
         }
         [c1, c2] => {
-            let t1 = transport::read_commit(*c1)?.tree()?;
-            let t2 = transport::read_commit(*c2)?.tree()?;
+            let c1 = r.rev_parse(c1)?;
+            let c2 = r.rev_parse(c2)?;
+            let t1 = transport::read_commit(c1)?.tree()?;
+            let t2 = transport::read_commit(c2)?.tree()?;
             t1.diff(&t2)
         }
         _ => panic!("too many arguments"),
@@ -163,12 +166,11 @@ pub fn diff(commits: &[Hash]) -> Result<()> {
     Ok(())
 }
 
-pub fn cat(chash: Hash, p: &Path) -> Result<()> {
-    let c = read_commit(chash)?;
-    let committree = c.tree()?;
-    let _file = Tree::file(&committree, p)?;
-    let buff = _file.contents()?;
-    io::stdout().write_all(&*buff)?;
+pub fn cat(commit: String, path: &Path) -> Result<()> {
+    let r = Repository::open()?;
+    let c = r.rev_parse(&commit)?;
+    let file = transport::read_commit(c)?.tree()?.file(path)?;
+    io::stdout().write_all(&file.contents()?)?;
     Ok(())
 }
 
@@ -205,9 +207,10 @@ pub fn log(amount: u32) -> Result<()> {
     Ok(())
 }
 
-pub fn merge(commit: Hash) -> Result<()> {
+pub fn merge(commit: String) -> Result<()> {
     let mut r = Repository::open()?;
-    match r.merge(commit) {
+
+    match r.merge(r.rev_parse(&commit)?) {
         Ok(MergeStrategy::FastForward) => println!("Fast-forward"),
         Ok(_) => println!("Merge complete: remember to commit."),
         Err(Error::MergeFailed(conflicts)) => {

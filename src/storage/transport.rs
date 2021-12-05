@@ -20,13 +20,14 @@ pub enum Error {
     FileNotFound,
     IoError(io::Error),
     MergeFailed(Vec<PathBuf>),
+    NoRepository,
     NothingToMerge,
     ObjectCorrupted,
     ObjectMissing,
     ObjectNotFound,
-    ReferenceNotFound,
-    NoRepository,
     PushFailed,
+    ReferenceNotFound,
+    RevisionNotFound,
 }
 
 impl error::Error for Error {}
@@ -40,13 +41,14 @@ impl fmt::Display for Error {
             FileNotFound => write!(f, "file not found"),
             IoError(error) => write!(f, "IO error: {}", error),
             MergeFailed(_) => write!(f, "merge failed"),
+            NoRepository => write!(f, "no repository at file path"),
             NothingToMerge => write!(f, "nothing to merge"),
             ObjectCorrupted => write!(f, "corrupted object"),
             ObjectMissing => write!(f, "missing object"),
             ObjectNotFound => write!(f, "object not found"),
-            ReferenceNotFound => write!(f, "reference not found"),
-            NoRepository => write!(f, "no repository at file path"),
             PushFailed => write!(f, "local and remote repositories differ. pull first"),
+            ReferenceNotFound => write!(f, "reference not found"),
+            RevisionNotFound => write!(f, "revision not found"),
         }
     }
 }
