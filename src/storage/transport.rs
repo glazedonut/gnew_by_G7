@@ -170,11 +170,9 @@ pub fn read_branches<P: AsRef<Path>>(r_path: P) -> Result<HashMap<String, Hash>>
         }
         let path = f.path();
         let name = path
-            .strip_prefix(r_path.as_ref().to_str().unwrap())
+            .strip_prefix(r_path.as_ref().join(".gnew/heads"))
             .unwrap()
             .to_str()
-            .unwrap()
-            .strip_prefix(".gnew/heads/")
             .unwrap();
         let hash = fs::read_to_string(path)?
             .trim()
@@ -234,63 +232,59 @@ mod tests {
     }
     #[test]
     #[should_panic]
-    fn check_blob_behavior_panic(){
-
+    fn check_blob_behavior_panic() {
         let b2 = read_blob(Hash::new()).unwrap();
-
     }
     #[test]
-    fn check_read_object(){
-        let refe =read_object(Hash::new());
-        let refeunwrap=match refe{
-            Ok(c) => {c}
-            Err(_) => {vec![111]}
+    fn check_read_object() {
+        let refe = read_object(Hash::new());
+        let refeunwrap = match refe {
+            Ok(c) => c,
+            Err(_) => {
+                vec![111]
+            }
         };
-        assert_eq!(refeunwrap,vec![111])
-
+        assert_eq!(refeunwrap, vec![111])
     }
     #[test]
-    fn test_read_commit(){
-        let commit =read_commit(Hash::new());
-        let commitur=match commit{
-            Ok(c) => {Ok(c)}
-            Err(c) => {Err(c)}
+    fn test_read_commit() {
+        let commit = read_commit(Hash::new());
+        let commitur = match commit {
+            Ok(c) => Ok(c),
+            Err(c) => Err(c),
         };
-        assert!(matches!(commitur,Err(ObjectNotFound)))
-
+        assert!(matches!(commitur, Err(ObjectNotFound)))
     }
     #[test]
-    fn test_head(){
+    fn test_head() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
-        let head= read_head(path);
-        let heads=match head{
-            Ok(c) => {Ok(c)}
-            Err(c) => {Err(c)}
+        let head = read_head(path);
+        let heads = match head {
+            Ok(c) => Ok(c),
+            Err(c) => Err(c),
         };
         heads.unwrap();
-
     }
     #[test]
-    fn check_repo_existence_test(){
+    fn check_repo_existence_test() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
-        let buf=check_repo_exists(path);
-        let buff=match buf{
-            Ok(c) => {Ok(c)}
-            Err(c) => {Err(c)}
+        let buf = check_repo_exists(path);
+        let buff = match buf {
+            Ok(c) => Ok(c),
+            Err(c) => Err(c),
         };
         buff.unwrap();
     }
     #[test]
-    fn check_file_existence_test(){
+    fn check_file_existence_test() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
         path.push("some_file");
 
-        let exists=check_existence(&vec![path]);
-        let filesearch=match exists{
-            Ok(_) => {Ok(())}
-            Err(c) => {Err(c)}
+        let exists = check_existence(&vec![path]);
+        let filesearch = match exists {
+            Ok(_) => Ok(()),
+            Err(c) => Err(c),
         };
-        assert!(matches!(filesearch,Err(FileNotFound)))
-
+        assert!(matches!(filesearch, Err(FileNotFound)))
     }
 }

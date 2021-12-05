@@ -2,11 +2,6 @@
 
 . ./test-lib.sh
 
-test_expect_success 'remove untracked file fails' '
-	! gnew remove test.txt 2>out &&
-	grep "fatal: file not found" out
-'
-
 cat >expect <<\EOF &&
 --- a/foo
 +++ b/foo
@@ -26,4 +21,9 @@ test_expect_success 'diff between two branches' '
 	test_commit bar bar &&
 	gnew diff main branch1 >out &&
 	diff expect out
+'
+
+test_expect_success 'remove missing file works' '
+	rm bar &&
+	gnew remove bar
 '
