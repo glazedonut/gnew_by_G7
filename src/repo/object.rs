@@ -502,7 +502,12 @@ impl Repository {
     }
 
     pub fn remove<P: AsRef<Path>>(&mut self, files: &Vec<P>) -> Result<()> {
-        transport::check_existence(files)?;
+        /* create dud files for files that don't exist on disk */
+        let duds: Vec<&P> = files.iter().filter(|x| !x.as_ref().exists()).collect();
+        for d in &duds {
+            fs::create_dir_all(d.as_ref().parent().unwrap())?;
+            fs::write(d, "")?;
+        }
 
         for f in files {
             let f = fs::canonicalize(f)?;
@@ -511,16 +516,23 @@ impl Repository {
             let mut prefix = p.to_str().unwrap().to_string();
 
             if md.is_file() {
+                /* remove file from tracklist */
                 self.tracklist.retain(|x| !(*x == prefix));
             } else if md.is_dir() {
                 let mut tmp = [0u8; 4];
                 prefix = prefix + '/'.encode_utf8(&mut tmp);
 
+                /* remove all files in a directory */
                 self.tracklist.retain(|x| !(*x).starts_with(&prefix));
             }
         }
 
         transport::write_tracklist(&self.worktree, &self.tracklist)?;
+
+        /* remove duds */
+        for d in duds {
+            fs::remove_file(d)?;
+        }
 
         Ok(())
     }
@@ -1284,14 +1296,14 @@ mod tests {
     fn add_test() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
         path.push("object.rs");
-        let mut r = Repository::open().unwrap();
+        let mut r = Repository::init().unwrap();
         r.add(&vec![path]);
     }
 
     #[test]
     #[should_panic]
     fn commit_test() {
-        let mut r = Repository::open().unwrap();
+        let mut r = Repository::init().unwrap();
         r.commit("test commit".to_string());
     }
 }

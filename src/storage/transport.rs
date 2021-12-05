@@ -282,6 +282,7 @@ mod tests {
         fs::write("foo.txt", b"test content").unwrap();
         let b1 = write_blob("foo.txt").unwrap();
         let b2 = read_blob(b1.hash()).unwrap();
+        fs::remove_file("foo.txt").unwrap();
         assert_eq!(b1, b2);
     }
     #[test]
