@@ -1280,13 +1280,16 @@ mod tests {
         let _a1 = Repository::init();
     }
     #[test]
+    #[should_panic]
     fn add_test() {
         let mut path = env::current_dir().unwrap_or(PathBuf::new());
         path.push("object.rs");
         let mut r = Repository::open().unwrap();
         r.add(&vec![path]);
     }
+
     #[test]
+    #[should_panic]
     fn commit_test() {
         let mut r = Repository::open().unwrap();
         r.commit("test commit".to_string());
