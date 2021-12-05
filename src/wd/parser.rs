@@ -137,17 +137,29 @@ pub fn heads() -> Result<()> {
 }
 
 pub fn diff(commits: &[Hash]) -> Result<()> {
-    match commits {
-        [] => todo!(),
-        [c1] => todo!(),
+    let r = Repository::open()?;
+
+    let changes = match commits {
+        [] => {
+            let tree = match r.head_hash() {
+                Ok(c) => transport::read_commit(c)?.tree()?,
+                Err(_) => return Ok(()),
+            };
+            r.diff_worktree(&tree)
+        }
+        [c1] => {
+            let tree = transport::read_commit(*c1)?.tree()?;
+            r.diff_worktree(&tree)
+        }
         [c1, c2] => {
             let t1 = transport::read_commit(*c1)?.tree()?;
             let t2 = transport::read_commit(*c2)?.tree()?;
-            let changes = t1.diff(&t2)?;
-            ui::print_diff(&changes)?;
+            t1.diff(&t2)
         }
         _ => panic!("too many arguments"),
-    }
+    }?;
+    ui::print_diff(&changes)?;
+
     Ok(())
 }
 

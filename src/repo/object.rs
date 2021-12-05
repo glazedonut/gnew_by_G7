@@ -8,6 +8,7 @@ use std::env;
 use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::result;
 use std::str;
@@ -527,6 +528,35 @@ impl Repository {
     //     Self::clone_recur(rt,dst);
     //     Ok(())
     // }
+
+    /// Returns the changes between a tree and the working tree.
+    pub fn diff_worktree(&self, from: &Tree) -> Result<Vec<Change>> {
+        let mut changes = vec![];
+        let mut from_files = HashMap::new();
+
+        for f in from.files() {
+            let f = f?;
+            from_files.insert(f.path.to_str().unwrap().to_owned(), f);
+        }
+        for to in &self.tracklist {
+            let to_path = PathBuf::from(to);
+
+            let change = match from_files.remove(to) {
+                Some(from) => match hash_file(&to_path) {
+                    Err(IoError(err)) if err.kind() == ErrorKind::NotFound => continue,
+                    Err(err) => return Err(err),
+                    Ok(to_hash) if from.hash != to_hash => Change::new_modify(from, to_path),
+                    Ok(_) => continue,
+                },
+                None => Change::new_add(to_path),
+            };
+            changes.push(change)
+        }
+        for from in from_files.into_values() {
+            changes.push(Change::new_remove(from))
+        }
+        Ok(changes)
+    }
 
     fn walk_worktree(&self, path: &Path) -> impl Iterator<Item = walkdir::Result<DirEntry>> + '_ {
         WalkDir::new(self.worktree.join(path))
