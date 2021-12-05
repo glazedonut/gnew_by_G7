@@ -257,6 +257,17 @@ impl Repository {
         self.set_head(Reference::Branch(name.to_owned()))
     }
 
+    /// Returns the commit specified by a revision string.
+    /// Supported formats: HEAD, <branch>, <hash>.
+    pub fn rev_parse(&self, r: &str) -> Result<Hash> {
+        if r == "HEAD" {
+            self.head_hash()
+        } else {
+            r.parse().or_else(|_| self.branch(r))
+        }
+        .or(Err(RevisionNotFound))
+    }
+
     /// Checks if a file is tracked.
     /// The path can be absolute or relative to the working tree.
     pub fn is_tracked(&self, path: &Path) -> bool {
