@@ -538,28 +538,19 @@ impl Repository {
 
         Ok(())
     }
-    // i need to fix dst. being moved, but otherwise fine
-    // fn clone_recur(src: impl AsRef<Path>, dst: impl AsRef<Path> ) -> Result<()>
-    // {
-    //     fs::create_dir_all(dst);
-    //     for entry in fs::read_dir(src)? // originally was going to use walkdir, might still be a better choice
-    //     {
-    //         let entry = entry?;
-    //         let src_path = entry.path();
-    //         if entry.file_type()?.is_dir()
-    //         {
-    //             Self::clone_recur(entry.path(),dst.as_ref().join(entry.file_name()));
-    //         } else{
-    //             fs::copy(src_path, dst.as_ref().join(entry.file_name()));
-    //         }
-    //     }
-    //     Ok(())
-    // }
-    // pub fn clone(dst: impl AsRef<Path>)->Result<()>{
-    //     let rt = PathBuf::from(".gnew");
-    //     Self::clone_recur(rt,dst);
-    //     Ok(())
-    // }
+    
+    //Clones the current directory to a provided path
+    //CURENTLY DOES NOT RUN CHECKOUT
+    pub fn clone<P: AsRef<Path> + Copy>(dst: P)-> Result<()>
+    {
+        use fs_extra::dir::copy;
+        fs::create_dir_all(dst);                        //this creates the folder incase it doesnt already exist
+        let options = dir::CopyOptions::new();
+        let mut paths = Vec::new();
+        paths.push(".gnew");
+        copy_items(&paths,dst,&options); 
+        Ok(())
+    }
 
     /// Returns the changes between a tree and the working tree.
     pub fn diff_worktree(&self, from: &Tree) -> Result<Vec<Change>> {
