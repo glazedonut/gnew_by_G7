@@ -12,6 +12,8 @@ To install:
 
 Make sure that you have `.cargo/bin` in your PATH to be able to run the installed program.
 
+## Testing
+
 To run tests:
 
     make -C tests
