@@ -216,7 +216,7 @@ impl Repository {
     }
 
     fn set_head(&mut self, head: Reference) -> Result<()> {
-        transport::write_head(&head)?;
+        transport::write_head(&self.worktree, &head)?;
         Ok(self.head = head)
     }
 
@@ -233,7 +233,7 @@ impl Repository {
     }
 
     fn set_branch(&mut self, name: &str, hash: Hash) -> Result<()> {
-        transport::write_branch(name, hash)?;
+        transport::write_branch(&self.worktree, name, hash)?;
         self.branches.insert(name.to_owned(), hash);
         Ok(())
     }
@@ -378,23 +378,23 @@ impl Repository {
             match f.1 {
                 /* file was added, remove */
                 FileStatus::Added => {
-                    fs::remove_file(f.0)?;
+                    fs::remove_file(self.worktree.join(f.0))?;
                 }
-                /* file was deleted, copy over */
-                FileStatus::Deleted => {
-                    Repository::copy_objects_to_files(&tree_files, f.0)?;
+                /* file was deleted or went missing, copy over */
+                FileStatus::Deleted | FileStatus::Missing => {
+                    self.copy_objects_to_files(&tree_files, f.0)?;
                 }
                 /* file was modified, remove and copy over */
                 FileStatus::Modified => {
-                    fs::remove_file(&f.0)?;
-                    Repository::copy_objects_to_files(&tree_files, f.0)?;
+                    fs::remove_file(self.worktree.join(&f.0))?;
+                    self.copy_objects_to_files(&tree_files, f.0)?;
                 }
                 /* file is the same, do nothing */
                 FileStatus::Unmodified => continue,
-                /* if checkout was forced, delete the untracked/missing file */
-                FileStatus::Untracked | FileStatus::Missing => {
+                /* if checkout was forced, delete the untracked file */
+                FileStatus::Untracked => {
                     if force {
-                        fs::remove_file(f.0)?
+                        fs::remove_file(self.worktree.join((f.0)))?
                     } else {
                         return Err(CheckoutFailed);
                     }
@@ -407,18 +407,18 @@ impl Repository {
         for file in tree_files {
             new_tracklist.push(file.0.to_str().unwrap().to_owned())
         }
-        transport::write_tracklist(&new_tracklist)?;
+        transport::write_tracklist(&self.worktree, &new_tracklist)?;
 
         /* update HEAD */
         self.set_head(new_head)
     }
 
-    fn copy_objects_to_files(files: &HashMap<PathBuf, Hash>, f: PathBuf) -> Result<()> {
+    fn copy_objects_to_files(&self, files: &HashMap<PathBuf, Hash>, f: PathBuf) -> Result<()> {
         for file in files {
             if *(file.0) == f {
-                fs::create_dir_all(file.0.parent().unwrap())?;
+                fs::create_dir_all(self.worktree.join(file.0.parent().unwrap()))?;
                 let blob: Blob = transport::read_blob(*file.1).map(|blob| blob.into())?;
-                fs::write(file.0, blob.content)?;
+                fs::write(self.worktree.join(file.0), blob.content)?;
                 break;
             }
         }
@@ -477,7 +477,7 @@ impl Repository {
             }
         }
 
-        transport::write_tracklist(&self.tracklist)?;
+        transport::write_tracklist(&self.worktree, &self.tracklist)?;
 
         Ok(())
     }
@@ -501,7 +501,7 @@ impl Repository {
             }
         }
 
-        transport::write_tracklist(&self.tracklist)?;
+        transport::write_tracklist(&self.worktree, &self.tracklist)?;
 
         Ok(())
     }
@@ -573,7 +573,7 @@ impl Repository {
 
             /* update local branches on disk */
             for b in &self.branches {
-                transport::write_branch(&b.0, *b.1)?;
+                transport::write_branch(&self.worktree, &b.0, *b.1)?;
             }
         } else {
             /* current branch name
@@ -625,28 +625,63 @@ impl Repository {
         let remote_objects = transport::get_objects(&remote.storage_dir)?;
         let mut local_objects = transport::get_objects(&self.storage_dir)?;
 
-        for local_branch in &self.branches {
-            match remote.branches_mut().get_mut(local_branch.0) {
+        if all {
+            for local_branch in &self.branches {
+                match remote.branches_mut().get_mut(local_branch.0) {
+                    Some(remote_hash) => {
+                        if local_objects.contains(&PathBuf::from(remote_hash.to_string())) {
+                            /* head of remote branch is stored in local repo, which
+                             * means its safe to "fast-forward" merge
+                             */
+                            *remote_hash = *local_branch.1;
+                        } else {
+                            /* have to pull to local before updating remote */
+                            return Err(PushFailed);
+                        }
+                    }
+                    None => {
+                        /* no remote branch by the name, create new */
+                        remote
+                            .branches_mut()
+                            .insert((*local_branch.0).to_string(), *local_branch.1);
+                    }
+                };
+            }
+
+            /* update remote branches on disk */
+            for b in remote.branches() {
+                transport::write_branch(&remote.worktree, &b.0, *b.1)?;
+            }
+        } else {
+            /* current branch name
+             * return ReferenceNotFound if HEAD detached
+             */
+            let curr_branch = match &self.head {
+                Reference::Branch(name) => name.clone(),
+                Reference::Hash(_) => return Err(ReferenceNotFound),
+            };
+            let local_hash = self.head_hash()?;
+
+            match remote.branches().get(&curr_branch) {
                 Some(remote_hash) => {
                     if local_objects.contains(&PathBuf::from(remote_hash.to_string())) {
-                        *remote_hash = *local_branch.1;
+                        remote.set_branch(&curr_branch, local_hash)?;
                     } else {
                         return Err(PushFailed);
                     }
                 }
                 None => {
-                    /* no remote branch by the name, create new */
-                    remote
-                        .branches_mut()
-                        .insert((*local_branch.0).to_string(), *local_branch.1);
+                    remote.set_branch(&curr_branch, local_hash)?;
                 }
-            };
+            }
         }
 
-        todo!();
-
         local_objects.retain(|x| !remote_objects.contains(x));
+        /* copy objects from local to remote */
         transport::copy_objects(&self.storage_dir, &remote.storage_dir, local_objects)?;
+
+        /* switch to latest version of branch head */
+        remote.checkout(self.head().clone(), true)?;
 
         Ok(())
     }

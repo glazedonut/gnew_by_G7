@@ -175,13 +175,13 @@ pub fn read_tracklist<P: AsRef<Path>>(path: P) -> Result<Vec<String>> {
     read_lines_gen(path)
 }
 
-pub fn write_tracklist(lines: &Vec<String>) -> Result<()> {
-    let path = PathBuf::from(".gnew/tracklist");
+pub fn write_tracklist<P: AsRef<Path>>(path: P, lines: &Vec<String>) -> Result<()> {
+    let path = path.as_ref().join(PathBuf::from(".gnew/tracklist"));
     write_lines_gen(path, lines)
 }
 
-pub fn write_head(r: &Reference) -> Result<()> {
-    let mut f = File::create(".gnew/HEAD")?;
+pub fn write_head<P: AsRef<Path>>(path: P, r: &Reference) -> Result<()> {
+    let mut f = File::create(path.as_ref().join(Path::new(".gnew/HEAD")))?;
     match r {
         Reference::Hash(h) => writeln!(f, "{}", h),
         Reference::Branch(b) => writeln!(f, "ref: {}", b),
@@ -199,8 +199,8 @@ pub fn read_head<P: AsRef<Path>>(path: P) -> Result<Reference> {
     })
 }
 
-pub fn write_branch(name: &str, commit: Hash) -> Result<()> {
-    let mut f = File::create(Path::new(".gnew/heads").join(name))?;
+pub fn write_branch<P: AsRef<Path>>(path: P, name: &str, commit: Hash) -> Result<()> {
+    let mut f = File::create(path.as_ref().join(Path::new(".gnew/heads").join(name)))?;
     writeln!(f, "{}", commit)?;
     Ok(())
 }
