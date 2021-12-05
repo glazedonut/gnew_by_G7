@@ -1,6 +1,7 @@
 use crate::storage::serialize::serialize_blob;
-use crate::storage::transport::Error::*;
-use crate::storage::transport::{self, Result};
+use crate::wd::ui::Error::*;
+use crate::wd::ui::{self, Result};
+use crate::storage::transport;
 use chrono::{DateTime, Utc};
 use diffy;
 use sha1::{self, Sha1};
@@ -15,6 +16,7 @@ use std::result;
 use std::str;
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
+
 
 const MAX_TREE_DEPTH: usize = 1024;
 

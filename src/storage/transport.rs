@@ -1,69 +1,16 @@
-use self::Error::*;
+//use self::Error::*;
 use super::serialize::*;
 use crate::repo::object::{Blob, Commit, Hash, Reference, Tree};
 use std::collections::HashMap;
-use std::error;
-use std::fmt;
+
 use std::fs::{self, File};
 use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::result;
+
 use walkdir::WalkDir;
 
-pub type Result<T> = result::Result<T, Error>;
-
-#[derive(Debug)]
-pub enum Error {
-    BranchExists,
-    CheckoutFailed,
-    DirtyWorktree,
-    FileNotFound,
-    IoError(io::Error),
-    MergeFailed(Vec<PathBuf>),
-    NoRepository,
-    NothingToMerge,
-    ObjectCorrupted,
-    ObjectMissing,
-    ObjectNotFound,
-    PushFailed,
-    ReferenceNotFound,
-    RevisionNotFound,
-}
-
-impl error::Error for Error {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            BranchExists => write!(f, "branch already exists"),
-            CheckoutFailed => write!(f, "commit or remove changes first"),
-            DirtyWorktree => write!(f, "dirty work tree"),
-            FileNotFound => write!(f, "file not found"),
-            IoError(error) => write!(f, "IO error: {}", error),
-            MergeFailed(_) => write!(f, "merge failed"),
-            NoRepository => write!(f, "no repository at file path"),
-            NothingToMerge => write!(f, "nothing to merge"),
-            ObjectCorrupted => write!(f, "corrupted object"),
-            ObjectMissing => write!(f, "missing object"),
-            ObjectNotFound => write!(f, "object not found"),
-            PushFailed => write!(f, "local and remote repositories differ. pull first"),
-            ReferenceNotFound => write!(f, "reference not found"),
-            RevisionNotFound => write!(f, "revision not found"),
-        }
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Error {
-        IoError(err)
-    }
-}
-
-impl From<walkdir::Error> for Error {
-    fn from(err: walkdir::Error) -> Error {
-        IoError(err.into())
-    }
-}
+use crate::wd::ui::Error::*;
+use crate::wd::ui::{self, Result};
 
 /// Creates and writes a blob object from the contents of a file.
 pub fn write_blob<P: AsRef<Path>>(path: P) -> Result<Blob> {

@@ -1,7 +1,8 @@
 use crate::repo::command;
 use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
-use crate::storage::transport::{self, Error, Result};
-use crate::wd::ui;
+use crate::wd::ui::{self, Error, Result};
+use crate::storage::transport;
+//use crate::wd::ui;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
