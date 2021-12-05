@@ -253,7 +253,7 @@ pub fn get_objects<P: AsRef<Path>>(path: P) -> Result<Vec<PathBuf>> {
         .collect::<Vec<PathBuf>>())
 }
 
-pub fn copy_objects<P: AsRef<Path>>(from: P, to: P, objects: Vec<PathBuf>) -> Result<()> {
+pub fn copy_objects<P: AsRef<Path>>(from: P, to: P, objects: &Vec<PathBuf>) -> Result<()> {
     let from_path = from.as_ref().join(Path::new("objects/"));
     let to_path = to.as_ref().join(Path::new("objects/"));
 

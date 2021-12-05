@@ -679,8 +679,14 @@ impl Repository {
 
         let remote = Repository::open_remote(path)?;
 
-        let mut remote_objects = transport::get_objects(&remote.storage_dir)?;
+        let remote_objects = transport::get_objects(&remote.storage_dir)?;
         let local_objects = transport::get_objects(&self.storage_dir)?;
+
+        /* remove any objects that already exist */
+        let mut to_copy = remote_objects.clone();
+        to_copy.retain(|x| !local_objects.contains(x));
+        /* copy objects from remote to local */
+        transport::copy_objects(&remote.storage_dir, &self.storage_dir, &to_copy)?;
 
         if all {
             /* copy over all the branches */
@@ -695,8 +701,9 @@ impl Repository {
                             *local_hash = *remote_branch.1;
                         } else {
                             /* have to merge */
-                            println!("merge");
-                            todo!();
+                            return Err(MergeFailed(vec![PathBuf::from(
+                                remote_branch.1.to_string(),
+                            )]));
                         }
                     }
                     /* no local branch by the name, create new */
@@ -737,15 +744,10 @@ impl Repository {
                 self.set_branch(&curr_branch, *remote_hash)?;
             } else {
                 /* have to merge */
-                println!("merge");
-                todo!();
+                self.merge(*remote_hash)?;
+                self.commit(format!("Merge {} with {}", local_hash, remote_hash))?;
             }
         }
-
-        /* remove any objects that already exist */
-        remote_objects.retain(|x| !local_objects.contains(x));
-        /* copy objects from remote to local */
-        transport::copy_objects(&remote.storage_dir, &self.storage_dir, remote_objects)?;
 
         /* switch to latest version of branch head */
         self.checkout(self.head.clone(), true)?;
@@ -814,7 +816,7 @@ impl Repository {
 
         local_objects.retain(|x| !remote_objects.contains(x));
         /* copy objects from local to remote */
-        transport::copy_objects(&self.storage_dir, &remote.storage_dir, local_objects)?;
+        transport::copy_objects(&self.storage_dir, &remote.storage_dir, &local_objects)?;
 
         /* switch to latest version of branch head */
         remote.checkout(self.head().clone(), true)?;
