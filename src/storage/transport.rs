@@ -267,6 +267,7 @@ pub fn copy_objects<P: AsRef<Path>>(from: P, to: P, objects: &Vec<PathBuf>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
 
     #[test]
     fn make_empty_repo() {
@@ -282,5 +283,66 @@ mod tests {
         let b1 = write_blob("foo.txt").unwrap();
         let b2 = read_blob(b1.hash()).unwrap();
         assert_eq!(b1, b2);
+    }
+    #[test]
+    #[should_panic]
+    fn check_blob_behavior_panic(){
+
+        let b2 = read_blob(Hash::new()).unwrap();
+
+    }
+    #[test]
+    fn check_read_object(){
+        let refe =read_object(Hash::new());
+        let refeunwrap=match refe{
+            Ok(c) => {c}
+            Err(_) => {vec![111]}
+        };
+        assert_eq!(refeunwrap,vec![111])
+
+    }
+    #[test]
+    fn test_read_commit(){
+        let commit =read_commit(Hash::new());
+        let commitur=match commit{
+            Ok(c) => {Ok(c)}
+            Err(c) => {Err(c)}
+        };
+        assert!(matches!(commitur,Err(ObjectNotFound)))
+
+    }
+    #[test]
+    fn test_head(){
+        let mut path = env::current_dir().unwrap_or(PathBuf::new());
+        let head= read_head(path);
+        let heads=match head{
+            Ok(c) => {Ok(c)}
+            Err(c) => {Err(c)}
+        };
+        heads.unwrap();
+
+    }
+    #[test]
+    fn check_repo_existence_test(){
+        let mut path = env::current_dir().unwrap_or(PathBuf::new());
+        let buf=check_repo_exists(path);
+        let buff=match buf{
+            Ok(c) => {Ok(c)}
+            Err(c) => {Err(c)}
+        };
+        buff.unwrap();
+    }
+    #[test]
+    fn check_file_existence_test(){
+        let mut path = env::current_dir().unwrap_or(PathBuf::new());
+        path.push("some_file");
+
+        let exists=check_existence(&vec![path]);
+        let filesearch=match exists{
+            Ok(_) => {Ok(())}
+            Err(c) => {Err(c)}
+        };
+        assert!(matches!(filesearch,Err(FileNotFound)))
+
     }
 }
