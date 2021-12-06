@@ -205,7 +205,7 @@ pub fn log(amount: u32) -> Result<()> {
     let r = Repository::open()?;
     let log = r.log(amount)?;
     for l in log {
-        println!("commit {}\n{}", l.hash(), l);
+        ui::print_commit(l,&r);
     }
     Ok(())
 }

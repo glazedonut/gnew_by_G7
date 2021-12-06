@@ -1,5 +1,5 @@
 use self::Error::*;
-use crate::repo::object::Change;
+use crate::repo::object::{Change,Commit};
 use crate::repo::repository::{FileStatus, Reference, Repository, Status};
 use similar::TextDiff;
 use std::error;
@@ -66,6 +66,23 @@ impl From<walkdir::Error> for Error {
     fn from(err: walkdir::Error) -> Error {
         IoError(err.into())
     }
+}
+pub fn print_commit(l:Commit, r:&Repository){
+    println!("\x1b[96mcommit {}\x1b[0m", l.hash());
+    // if !r.head_hash().is_err(){
+    //     println!("HEAD: {} ", r.head_hash().unwrap());
+    // }else{
+    //     println!("HEAD: detached");
+    // }
+
+    for i in (*(*r).branches()).keys(){
+        if (*(*r).branches())[i]==l.hash() {
+            println!("branch: {} ", i);
+        }
+    }
+    println!("Author: {}", l.author());
+    println!("Time: {}", l.time().to_rfc2822());
+    println!("Summary:\n{}", l.msg());
 }
 
 pub fn print_status(status: &Status) {
