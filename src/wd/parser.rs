@@ -15,7 +15,6 @@ enum Gnew {
     /// Copy an existing repository
     Clone {
         repository: PathBuf,
-        directory: PathBuf,
     },
     /// Add files to tracking list
     Add {
@@ -117,6 +116,13 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     let mut r = Repository::open()?;
     r.remove(paths)?;
 
+    Ok(())
+}
+
+pub fn clone<P: AsRef<Path> + Copy>(rep: P)-> Result<()>
+{
+    let mut r = Repository::open()?;
+    r.clone(rep);
     Ok(())
 }
 
@@ -262,10 +268,7 @@ pub fn main() {
     let opt = Gnew::from_args();
     match opt {
         Gnew::Init => init(),
-        Gnew::Clone {
-            repository,
-            directory,
-        } => todo!(),
+        Gnew::Clone {repository} => clone(&repository),
         Gnew::Add { paths } => add(&paths),
         Gnew::Remove { paths } => remove(&paths),
         Gnew::Status => status(),
