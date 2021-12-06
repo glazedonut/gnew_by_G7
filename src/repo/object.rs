@@ -1,10 +1,9 @@
 use crate::storage::serialize::serialize_blob;
-use crate::wd::ui::Error::*;
-use crate::wd::ui::{self, Result};
 use crate::storage::transport;
+use crate::wd::ui::{Error::*, Result};
 use chrono::{DateTime, Utc};
 use diffy;
-use fs_extra::{copy_items, dir}; 
+use fs_extra::{copy_items, dir};
 use sha1::{self, Sha1};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -17,7 +16,6 @@ use std::result;
 use std::str;
 use std::vec;
 use walkdir::{self, DirEntry, WalkDir};
-
 
 const MAX_TREE_DEPTH: usize = 1024;
 
@@ -539,17 +537,15 @@ impl Repository {
 
         Ok(())
     }
-    
-    pub fn clone<P: AsRef<Path> + Copy>(src: P)-> Result<()>
-    {  
+
+    pub fn clone<P: AsRef<Path> + Copy>(src: P) -> Result<()> {
         let options = dir::CopyOptions::new();
         let paths = vec![src];
-    
-        match copy_items(&paths, ".",&options) {
+
+        match copy_items(&paths, ".", &options) {
             Ok(_) => Ok(()),
-            Err(_) => Err(RepositoryExists)
+            Err(_) => Err(RepositoryExists),
         }
-    
     }
 
     /// Returns the changes between a tree and the working tree.
@@ -1299,9 +1295,9 @@ mod tests {
         let mut r = Repository::init().unwrap();
         r.commit("test commit".to_string());
     }
-    
+
     //#[test] //this works, but my abilitiy to upload entirely new folders to github is none, so
-    // fn clone_test(){ 
+    // fn clone_test(){
     //     let mut r = Repository::init().unwrap();
     //     r.clone("gnewholder/.gnew");              //this is just a folder that has a different repository in it
     // }

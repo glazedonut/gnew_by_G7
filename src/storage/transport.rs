@@ -1,16 +1,11 @@
-//use self::Error::*;
 use super::serialize::*;
 use crate::repo::object::{Blob, Commit, Hash, Reference, Tree};
+use crate::wd::ui::{Error::*, Result};
 use std::collections::HashMap;
-
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::{Path, PathBuf};
-
 use walkdir::WalkDir;
-
-use crate::wd::ui::Error::*;
-use crate::wd::ui::{self, Result};
 
 /// Creates and writes a blob object from the contents of a file.
 pub fn write_blob<P: AsRef<Path>>(path: P) -> Result<Blob> {

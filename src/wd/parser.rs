@@ -1,8 +1,7 @@
 use crate::repo::command;
 use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
-use crate::wd::ui::{self, Error, Result};
 use crate::storage::transport;
-//use crate::wd::ui;
+use crate::wd::ui::{self, Error, Result};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
@@ -13,9 +12,7 @@ enum Gnew {
     /// Create an empty repository
     Init,
     /// Copy an existing repository
-    Clone {
-        repository: PathBuf,
-    },
+    Clone { repository: PathBuf },
     /// Add files to tracking list
     Add {
         #[structopt(required = true)]
@@ -105,6 +102,11 @@ pub fn init() -> Result<()> {
     Ok(())
 }
 
+pub fn clone<P: AsRef<Path> + Copy>(rep: P) -> Result<()> {
+    Repository::clone(rep)?;
+    Ok(())
+}
+
 pub fn add<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     let mut r = Repository::open()?;
     r.add(paths)?;
@@ -116,12 +118,6 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
     let mut r = Repository::open()?;
     r.remove(paths)?;
 
-    Ok(())
-}
-
-pub fn clone<P: AsRef<Path> + Copy>(rep: P)-> Result<()>
-{
-    Repository::clone(rep)?;
     Ok(())
 }
 
@@ -267,7 +263,7 @@ pub fn main() {
     let opt = Gnew::from_args();
     match opt {
         Gnew::Init => init(),
-        Gnew::Clone {repository} => clone(&repository),
+        Gnew::Clone { repository } => clone(&repository),
         Gnew::Add { paths } => add(&paths),
         Gnew::Remove { paths } => remove(&paths),
         Gnew::Status => status(),

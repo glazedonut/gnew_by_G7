@@ -1,13 +1,11 @@
+use self::Error::*;
 use crate::repo::object::{Change, FileStatus, Status};
-//use crate::storage::transport::Result;
 use similar::TextDiff;
-use std::io;
-use std::path::{Path, PathBuf};
-
 use std::error;
 use std::fmt;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::result;
-use self::Error::*;
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -49,7 +47,10 @@ impl fmt::Display for Error {
             PushFailed => write!(f, "local and remote repositories differ, pull first"),
             ReferenceNotFound => write!(f, "reference not found"),
             RevisionNotFound => write!(f, "revision not found"),
-            RepositoryExists => write!(f, "local repository by the same name already exists, delete it first")
+            RepositoryExists => write!(
+                f,
+                "local repository by the same name already exists, delete it first"
+            ),
         }
     }
 }
@@ -65,9 +66,6 @@ impl From<walkdir::Error> for Error {
         IoError(err.into())
     }
 }
-
-
-
 
 pub fn print_status(status: &Status) {
     for (path, fstatus) in status {
