@@ -77,7 +77,7 @@ pub fn print_commit(l:Commit, r:&Repository){
 
     for i in (*(*r).branches()).keys(){
         if (*(*r).branches())[i]==l.hash() {
-            println!("branch: {} ", i);
+            println!("Branch: {} ", i);
         }
     }
     println!("Author: {}", l.author());
