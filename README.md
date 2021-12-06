@@ -8,9 +8,12 @@ To download gnew:
 
 To install:
 
+    cd gnew_by_G7
     cargo install --path .
 
-Make sure that you have `.cargo/bin` in your PATH to be able to run the installed program.
+Make sure that you have `.cargo/bin` in your PATH to be able to run the installed program:
+
+    export PATH="~/.cargo/bin:$PATH"
 
 ## Testing
 
@@ -39,7 +42,7 @@ clone <PATH>                            Copy an existing repository
 
 commit <MESSAGE>                        Commit changes to the repository
 
-diff <COMMIT1> <COMMIT2>                Show changes between commits
+diff [<COMMIT1> [<COMMIT2>]]            Show changes between commits or a commit and the working directory
 
 hash-file <PATH>                        Write a blob object from a file
 
