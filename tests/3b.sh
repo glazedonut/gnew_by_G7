@@ -18,6 +18,11 @@ test_expect_success 'log 1 prints exactly one commit' '
 	! gnew log 1 | grep init	
 '
 
-test_expect_success 'heads shows other branches' '
-	gnew heads
+test_expect_success 'heads shows all branches' '
+	gnew checkout -b branch1 &&
+	gnew checkout -b another &&
+	gnew heads >out &&
+	grep main out &&
+	grep branch1 out &&
+	grep another out
 '

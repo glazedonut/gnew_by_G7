@@ -1,4 +1,3 @@
-use crate::repo::command;
 use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
 use crate::storage::transport;
 use crate::wd::ui::{self, Error, Result};
@@ -134,7 +133,8 @@ pub fn status() -> Result<()> {
 }
 
 pub fn heads() -> Result<()> {
-    command::heads()?;
+    let r = Repository::open()?;
+    ui::print_heads(&r);
     Ok(())
 }
 

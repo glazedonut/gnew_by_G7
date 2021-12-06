@@ -1,5 +1,5 @@
 use self::Error::*;
-use crate::repo::object::{Change, FileStatus, Status};
+use crate::repo::object::{Change, FileStatus, Reference, Repository, Status};
 use similar::TextDiff;
 use std::error;
 use std::fmt;
@@ -73,6 +73,19 @@ pub fn print_status(status: &Status) {
             FileStatus::Unmodified => (),
             _ => println!("{} {}", fstatus.code(), path.display()),
         }
+    }
+}
+
+pub fn print_heads(r: &Repository) {
+    let mut branches: Vec<_> = r.branches().keys().collect();
+    branches.sort();
+
+    for branch in branches {
+        let current = match r.head() {
+            Reference::Branch(b) if b == branch => "*",
+            _ => " ",
+        };
+        println!("{} {}", current, branch)
     }
 }
 
