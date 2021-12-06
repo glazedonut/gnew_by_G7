@@ -1,4 +1,5 @@
-use crate::repo::object::{Hash, MergeStrategy, Reference, Repository, Tree};
+use crate::repo::object::{Hash, Tree};
+use crate::repo::repository::{MergeStrategy, Reference, Repository};
 use crate::storage::transport;
 use crate::wd::ui::{self, Error, Result};
 use std::io::{self, Write};

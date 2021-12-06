@@ -1,5 +1,6 @@
 use super::serialize::*;
-use crate::repo::object::{Blob, Commit, Hash, Reference, Tree};
+use crate::repo::object::{Blob, Commit, Hash, Tree};
+use crate::repo::repository::Reference;
 use crate::wd::ui::{Error::*, Result};
 use std::collections::HashMap;
 use std::fs::{self, File};
@@ -228,7 +229,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn check_blob_behavior_panic() {
-        let b2 = read_blob(Hash::new()).unwrap();
+        let _b2 = read_blob(Hash::new()).unwrap();
     }
     #[test]
     fn check_read_object() {
@@ -252,7 +253,7 @@ mod tests {
     }
     #[test]
     fn test_head() {
-        let mut path = env::current_dir().unwrap_or(PathBuf::new());
+        let path = env::current_dir().unwrap_or(PathBuf::new());
         let head = read_head(path);
         let heads = match head {
             Ok(c) => Ok(c),
@@ -262,7 +263,7 @@ mod tests {
     }
     #[test]
     fn check_repo_existence_test() {
-        let mut path = env::current_dir().unwrap_or(PathBuf::new());
+        let path = env::current_dir().unwrap_or(PathBuf::new());
         let buf = check_repo_exists(path);
         let buff = match buf {
             Ok(c) => Ok(c),

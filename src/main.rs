@@ -1,5 +1,5 @@
-use gnew::wd::parser;
+use gnew::wd::command;
 
 fn main() {
-    parser::main()
+    command::main()
 }

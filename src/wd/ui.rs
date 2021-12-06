@@ -1,5 +1,6 @@
 use self::Error::*;
-use crate::repo::object::{Change, FileStatus, Reference, Repository, Status};
+use crate::repo::object::Change;
+use crate::repo::repository::{FileStatus, Reference, Repository, Status};
 use similar::TextDiff;
 use std::error;
 use std::fmt;
