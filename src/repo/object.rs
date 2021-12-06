@@ -4,6 +4,7 @@ use crate::wd::ui::{self, Result};
 use crate::storage::transport;
 use chrono::{DateTime, Utc};
 use diffy;
+use fs_extra::{copy_items, dir}; 
 use sha1::{self, Sha1};
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -539,16 +540,14 @@ impl Repository {
         Ok(())
     }
     
-    //Clones the current directory to a provided path
-    //CURENTLY DOES NOT RUN CHECKOUT
-    pub fn clone<P: AsRef<Path> + Copy>(dst: P)-> Result<()>
+    pub fn clone<P: AsRef<Path> + Copy>(&self,src: P)-> Result<()>
     {
         use fs_extra::dir::copy;
-        fs::create_dir_all(dst);                        //this creates the folder incase it doesnt already exist
+       
         let options = dir::CopyOptions::new();
         let mut paths = Vec::new();
-        paths.push(".gnew");
-        copy_items(&paths,dst,&options); 
+        paths.push(src);
+        copy_items(&paths, "gnew_by_G7-main",&options); 
         Ok(())
     }
 
@@ -1299,4 +1298,10 @@ mod tests {
         let mut r = Repository::init().unwrap();
         r.commit("test commit".to_string());
     }
+    
+    //#[test] //this works, but my abilitiy to upload entirely new folders to github is none, so
+    // fn clone_test(){ 
+    //     let mut r = Repository::init().unwrap();
+    //     r.clone("gnewholder/.gnew");              //this is just a folder that has a different repository in it
+    // }
 }
