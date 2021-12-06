@@ -27,6 +27,7 @@ pub enum Error {
     PushFailed,
     ReferenceNotFound,
     RevisionNotFound,
+    RepositoryExists,
 }
 
 impl error::Error for Error {}
@@ -45,9 +46,10 @@ impl fmt::Display for Error {
             ObjectCorrupted => write!(f, "corrupted object"),
             ObjectMissing => write!(f, "missing object"),
             ObjectNotFound => write!(f, "object not found"),
-            PushFailed => write!(f, "local and remote repositories differ. pull first"),
+            PushFailed => write!(f, "local and remote repositories differ, pull first"),
             ReferenceNotFound => write!(f, "reference not found"),
             RevisionNotFound => write!(f, "revision not found"),
+            RepositoryExists => write!(f, "local repository by the same name already exists, delete it first")
         }
     }
 }

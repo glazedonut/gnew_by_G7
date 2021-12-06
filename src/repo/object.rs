@@ -540,15 +540,16 @@ impl Repository {
         Ok(())
     }
     
-    pub fn clone<P: AsRef<Path> + Copy>(&self,src: P)-> Result<()>
-    {
-        use fs_extra::dir::copy;
-       
+    pub fn clone<P: AsRef<Path> + Copy>(src: P)-> Result<()>
+    {  
         let options = dir::CopyOptions::new();
-        let mut paths = Vec::new();
-        paths.push(src);
-        copy_items(&paths, "gnew_by_G7-main",&options); 
-        Ok(())
+        let paths = vec![src];
+    
+        match copy_items(&paths, ".",&options) {
+            Ok(_) => Ok(()),
+            Err(_) => Err(RepositoryExists)
+        }
+    
     }
 
     /// Returns the changes between a tree and the working tree.

@@ -4,7 +4,7 @@ use crate::repo::object::{Blob, Commit, Hash, Reference, Tree};
 use std::collections::HashMap;
 
 use std::fs::{self, File};
-use std::io::{self, BufRead, BufReader, ErrorKind, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use walkdir::WalkDir;

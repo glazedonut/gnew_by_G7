@@ -121,8 +121,7 @@ pub fn remove<P: AsRef<Path>>(paths: &Vec<P>) -> Result<()> {
 
 pub fn clone<P: AsRef<Path> + Copy>(rep: P)-> Result<()>
 {
-    let mut r = Repository::open()?;
-    r.clone(rep);
+    Repository::clone(rep)?;
     Ok(())
 }
 
